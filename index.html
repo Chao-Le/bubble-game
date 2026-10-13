@@ -11,7 +11,8 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Языковые Пузыри">
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%23F9A8D4%22/><circle cx=%2235%22 cy=%2240%22 r=%2215%22 fill=%22white%22/><circle cx=%2265%22 cy=%2240%22 r=%2215%22 fill=%22white%22/><circle cx=%2235%22 cy=%2240%22 r=%225%22 fill=%22%231F2937%22/><circle cx=%2265%22 cy=%2240%22 r=%225%22 fill=%22%231F2937%22/><path d=%22M 45 55 L 55 55 L 50 65 Z%22 fill=%22%23F59E0B%22/></svg>">
-
+   <link rel="manifest" href="manifest.json">
+    
     <!-- Tailwind CSS for structural styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -1411,5 +1412,18 @@
         } catch(e) {}
 
     </script>
+       <script>
+       if ('serviceWorker' in navigator) {
+           window.addEventListener('load', () => {
+               navigator.serviceWorker.register('./service-worker.js')
+                   .then(registration => {
+                       console.log('ServiceWorker registered:', registration.scope);
+                   })
+                   .catch(error => {
+                       console.log('ServiceWorker registration failed:', error);
+                   });
+           });
+       }
+   </script>
 </body>
 </html>
