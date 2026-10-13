@@ -1,0 +1,1415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Language Bubbles</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#fbcfe8">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Языковые Пузыри">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%23F9A8D4%22/><circle cx=%2235%22 cy=%2240%22 r=%2215%22 fill=%22white%22/><circle cx=%2265%22 cy=%2240%22 r=%2215%22 fill=%22white%22/><circle cx=%2235%22 cy=%2240%22 r=%225%22 fill=%22%231F2937%22/><circle cx=%2265%22 cy=%2240%22 r=%225%22 fill=%22%231F2937%22/><path d=%22M 45 55 L 55 55 L 50 65 Z%22 fill=%22%23F59E0B%22/></svg>">
+
+    <!-- Tailwind CSS for structural styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            /* Prevent scrolling and zooming for a native app feel */
+            overscroll-behavior: none;
+            touch-action: none;
+        }
+
+        .bubble {
+            /* 3D soap bubble effect without motion */
+            background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9), rgba(240,248,255,0.7) 60%, rgba(200,220,255,0.5));
+            border: 1px solid rgba(255,255,255,0.8);
+            box-shadow: 
+                inset -5px -5px 15px rgba(0,0,0,0.05),
+                inset 5px 5px 15px rgba(255,255,255,0.9),
+                0 6px 12px rgba(0,0,0,0.1);
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s;
+        }
+
+        /* Stop float animation when selected */
+        .bubble.selected {
+            transform: scale(1.15) !important;
+            box-shadow: 
+                0 0 0 4px #FCD34D,
+                0 0 25px 8px rgba(252, 211, 77, 0.7),
+                inset -5px -5px 15px rgba(0,0,0,0.05),
+                inset 5px 5px 15px rgba(255,255,255,0.9);
+            border-color: transparent;
+            z-index: 50;
+        }
+
+        /* Error state: flashes red and shakes */
+        .bubble.wrong {
+            background: #FCA5A5 !important;
+            background-image: none !important;
+            border-color: #EF4444 !important;
+            color: white !important;
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both !important;
+        }
+
+        /* Success state: turns green, pops, and vanishes */
+        .bubble.matched {
+            background: #86EFAC !important;
+            background-image: none !important;
+            border-color: #22C55E !important;
+            color: #14532D !important;
+            animation: popOut 0.5s ease-out forwards !important;
+            pointer-events: none; /* Prevent clicking during pop */
+            z-index: 40;
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-2px, 0, 0); }
+            20%, 80% { transform: translate3d(4px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+            40%, 60% { transform: translate3d(6px, 0, 0); }
+        }
+
+        @keyframes popOut {
+            0% { transform: scale(1.15); opacity: 1; box-shadow: 0 0 20px #4ADE80; }
+            40% { transform: scale(1.3); opacity: 1; }
+            100% { transform: scale(1.6); opacity: 0; visibility: hidden; }
+        }
+
+        @keyframes wise-blink {
+            0%, 95%, 98%, 100% { transform: scaleY(1); }
+            96%, 99% { transform: scaleY(0.1); }
+        }
+
+        .wise-eye {
+            animation: wise-blink 4s infinite;
+        }
+        
+        /* Particle animation class applied via JS */
+        .splash-particle {
+            border-radius: 50%;
+            pointer-events: none;
+            position: absolute;
+            z-index: 100;
+        }
+
+        /* Portrait Lock for Mobile */
+        @media (max-width: 1024px) and (orientation: landscape) and (hover: none) and (pointer: coarse) {
+            #app { display: none !important; }
+            #portrait-lock-overlay { display: flex !important; }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 h-screen w-screen overflow-hidden font-sans select-none">
+    
+    <!-- Portrait Lock Overlay (Visible only on mobile landscape) -->
+    <div id="portrait-lock-overlay" class="hidden fixed inset-0 bg-gradient-to-br from-pink-400 to-pink-600 z-[100] flex-col items-center justify-center p-8 text-white text-center">
+        <svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mb-6">
+            <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+            <path d="M12 18h.01"></path>
+            <path d="M21.5 12a9.5 9.5 0 0 1-5.6 8.7"></path>
+            <path d="M21.5 12a9.5 9.5 0 0 0-5.6-8.7"></path>
+        </svg>
+        <h2 class="text-3xl font-black mb-4 leading-tight">Поверните<br>устройство</h2>
+        <p class="text-lg font-bold opacity-90">Игра доступна только<br>в вертикальном режиме.</p>
+    </div>
+
+    <div id="app" class="w-full h-full relative">
+        
+        <!-- Background: Magic Forest with Books growing on trees -->
+        <svg id="magic-forest-bg" class="absolute inset-0 w-full h-full object-cover z-0 pointer-events-none opacity-40" preserveAspectRatio="xMidYMid slice" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="trunk1" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#4B5563" />
+                    <stop offset="100%" stop-color="#374151" />
+                </linearGradient>
+                <linearGradient id="leafGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#A7F3D0" stop-opacity="0.6"/>
+                    <stop offset="100%" stop-color="#059669" stop-opacity="0.4"/>
+                </linearGradient>
+                <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="5" result="blur" />
+                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                </filter>
+            </defs>
+            
+            <!-- Trunks -->
+            <path d="M 150 1000 C 180 700, 120 400, 150 0 L 220 0 C 180 400, 240 700, 200 1000 Z" fill="url(#trunk1)" />
+            <path d="M 800 1000 C 760 600, 820 300, 780 0 L 860 0 C 880 300, 820 600, 850 1000 Z" fill="url(#trunk1)" />
+            <path d="M 450 1000 C 480 800, 420 500, 460 0 L 510 0 C 470 500, 520 800, 490 1000 Z" fill="url(#trunk1)" opacity="0.7"/>
+
+            <!-- Branches -->
+            <path d="M 180 400 C 250 380, 320 320, 350 250" stroke="url(#trunk1)" stroke-width="25" fill="none" stroke-linecap="round"/>
+            <path d="M 200 700 C 300 650, 400 680, 450 600" stroke="url(#trunk1)" stroke-width="20" fill="none" stroke-linecap="round"/>
+            <path d="M 810 300 C 700 320, 600 250, 550 200" stroke="url(#trunk1)" stroke-width="28" fill="none" stroke-linecap="round"/>
+            <path d="M 830 650 C 750 620, 650 650, 600 600" stroke="url(#trunk1)" stroke-width="18" fill="none" stroke-linecap="round"/>
+
+            <!-- Canopy Leaves -->
+            <circle cx="180" cy="100" r="250" fill="url(#leafGrad)" />
+            <circle cx="820" cy="50" r="300" fill="url(#leafGrad)" />
+            <circle cx="480" cy="-50" r="220" fill="url(#leafGrad)" />
+            <circle cx="350" cy="300" r="180" fill="url(#leafGrad)" />
+            <circle cx="650" cy="350" r="200" fill="url(#leafGrad)" />
+            
+            <!-- Floating Magic Particles -->
+            <circle cx="200" cy="500" r="4" fill="#FDE047" filter="url(#glow)"/>
+            <circle cx="700" cy="800" r="5" fill="#FDE047" filter="url(#glow)"/>
+            <circle cx="500" cy="400" r="3" fill="#FDE047" filter="url(#glow)"/>
+            <circle cx="300" cy="850" r="6" fill="#FDE047" filter="url(#glow)"/>
+            <circle cx="850" cy="450" r="4" fill="#FDE047" filter="url(#glow)"/>
+
+            <!-- Books Growing on Trees -->
+            <g transform="translate(250, 310) rotate(-20)">
+                <rect x="0" y="0" width="40" height="55" rx="4" fill="#F472B6" />
+                <rect x="32" y="3" width="6" height="49" fill="#FFF" />
+                <line x1="8" y1="15" x2="25" y2="15" stroke="#BE185D" stroke-width="3" stroke-linecap="round"/>
+                <line x1="8" y1="25" x2="20" y2="25" stroke="#BE185D" stroke-width="3" stroke-linecap="round"/>
+            </g>
+            <g transform="translate(680, 230) rotate(15)">
+                <rect x="0" y="0" width="45" height="60" rx="4" fill="#60A5FA" />
+                <rect x="0" y="3" width="6" height="54" fill="#FFF" />
+                <line x1="15" y1="20" x2="35" y2="20" stroke="#1E3A8A" stroke-width="3" stroke-linecap="round"/>
+                <line x1="15" y1="30" x2="25" y2="30" stroke="#1E3A8A" stroke-width="3" stroke-linecap="round"/>
+            </g>
+            <g transform="translate(420, 560) rotate(-10)">
+                <rect x="0" y="0" width="35" height="50" rx="3" fill="#FBBF24" />
+                <rect x="28" y="2" width="5" height="46" fill="#FFF" />
+                <line x1="6" y1="12" x2="22" y2="12" stroke="#B45309" stroke-width="2" stroke-linecap="round"/>
+                <line x1="6" y1="20" x2="16" y2="20" stroke="#B45309" stroke-width="2" stroke-linecap="round"/>
+            </g>
+            <g transform="translate(320, 620) rotate(25)">
+                <rect x="0" y="0" width="30" height="45" rx="3" fill="#34D399" />
+                <rect x="0" y="2" width="5" height="41" fill="#FFF" />
+                <line x1="10" y1="15" x2="22" y2="15" stroke="#065F46" stroke-width="2" stroke-linecap="round"/>
+            </g>
+            <g transform="translate(720, 580) rotate(-30)">
+                <rect x="0" y="0" width="38" height="52" rx="4" fill="#A78BFA" />
+                <rect x="30" y="2" width="6" height="48" fill="#FFF" />
+                <line x1="8" y1="18" x2="24" y2="18" stroke="#5B21B6" stroke-width="2" stroke-linecap="round"/>
+            </g>
+        </svg>
+
+        <!-- ================= HOME SCREEN ================= -->
+        <div id="home-screen" class="absolute inset-0 flex flex-col items-center justify-center p-6 z-20 transition-opacity duration-500" style="display: flex;">
+            
+            <!-- Settings Button -->
+            <button id="settings-btn" class="absolute top-6 right-6 p-3 bg-white/70 backdrop-blur-md rounded-full shadow-lg hover:bg-white hover:scale-105 active:scale-95 transition-all text-pink-500 border-2 border-pink-200 z-30">
+                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+            </button>
+
+            <!-- Wise Pink Owl SVG (Static with Blinking Eyes) -->
+            <div class="mb-4">
+                <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" class="w-56 h-56 mx-auto drop-shadow-2xl">
+                    <g id="wise-pink-owl">
+                        <!-- Ear Tufts -->
+                        <path d="M 50 60 C 30 30, 40 20, 60 40 Z" fill="#DB2777" />
+                        <path d="M 150 60 C 170 30, 160 20, 140 40 Z" fill="#DB2777" />
+                        
+                        <!-- Body -->
+                        <path d="M 40 90 C 40 40, 160 40, 160 90 C 160 150, 140 180, 100 180 C 60 180, 40 150, 40 90 Z" fill="#F9A8D4" />
+                        
+                        <!-- Belly -->
+                        <path d="M 60 100 C 60 70, 140 70, 140 100 C 140 160, 120 170, 100 170 C 80 170, 60 160, 60 100 Z" fill="#FCE7F3" />
+                        
+                        <!-- Wings -->
+                        <path d="M 40 90 C 20 110, 25 150, 50 160 C 40 140, 45 110, 40 90 Z" fill="#F472B6" />
+                        <path d="M 160 90 C 180 110, 175 150, 150 160 C 160 140, 155 110, 160 90 Z" fill="#F472B6" />
+
+                        <!-- Half-moon Glasses -->
+                        <circle cx="75" cy="85" r="22" fill="none" stroke="#FBBF24" stroke-width="4" />
+                        <circle cx="125" cy="85" r="22" fill="none" stroke="#FBBF24" stroke-width="4" />
+                        <path d="M 97 85 L 103 85" stroke="#FBBF24" stroke-width="4" />
+
+                        <!-- Eyes with Blinking Animation -->
+                        <g class="wise-eye" style="transform-origin: 75px 85px;">
+                            <circle cx="75" cy="85" r="18" fill="white" />
+                            <path d="M 53 85 C 65 70, 85 70, 97 85 Z" fill="#F472B6" />
+                            <circle cx="75" cy="90" r="6" fill="#1F2937" />
+                            <circle cx="73" cy="88" r="2" fill="white" />
+                        </g>
+                        <g class="wise-eye" style="transform-origin: 125px 85px;">
+                            <circle cx="125" cy="85" r="18" fill="white" />
+                            <path d="M 103 85 C 115 70, 135 70, 147 85 Z" fill="#F472B6" />
+                            <circle cx="125" cy="90" r="6" fill="#1F2937" />
+                            <circle cx="123" cy="88" r="2" fill="white" />
+                        </g>
+
+                        <!-- Beak -->
+                        <path d="M 92 95 L 108 95 L 100 115 Z" fill="#F59E0B" />
+
+                        <!-- Feet -->
+                        <path d="M 70 175 C 75 185, 85 185, 90 175 Z" fill="#F59E0B" />
+                        <path d="M 110 175 C 115 185, 125 185, 130 175 Z" fill="#F59E0B" />
+                        
+                        <!-- Feathers detail -->
+                        <path d="M 60 140 C 65 145, 75 145, 80 140 Z" fill="none" stroke="#F9A8D4" stroke-width="3" stroke-linecap="round" />
+                        <path d="M 120 140 C 125 145, 135 145, 140 140 Z" fill="none" stroke="#F9A8D4" stroke-width="3" stroke-linecap="round" />
+                    </g>
+                </svg>
+            </div>
+            
+            <!-- Welcome Message Card -->
+            <div class="bg-white/90 backdrop-blur-md rounded-[2rem] p-8 shadow-2xl max-w-sm w-full text-center border-4 border-pink-300 relative">
+                <!-- Speech Bubble Triangle -->
+                <div class="absolute -top-4 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-[15px] border-r-[15px] border-b-[20px] border-l-transparent border-r-transparent border-b-pink-300"></div>
+                <div class="absolute -top-3 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-[15px] border-r-[15px] border-b-[20px] border-l-transparent border-r-transparent border-b-white/90"></div>
+                
+                <p class="text-3xl text-pink-600 font-black mb-8 leading-snug">
+                    Привет! <br>Давай поиграем! <br><span class="text-2xl text-pink-500 font-bold">Соедини английские слова с их переводом.</span>
+                </p>
+                
+                <!-- SRS Empty Notification -->
+                <div id="srs-empty-msg" class="hidden bg-pink-100 border-2 border-pink-300 text-pink-700 rounded-xl p-3 mb-4 font-bold text-sm shadow-sm animate-pulse">
+                    🎉 Отличная работа! На сегодня новых и требующих повторения слов нет. Возвращайся позже!
+                </div>
+                
+                <button id="start-btn" class="w-full bg-gradient-to-r from-pink-400 to-purple-400 hover:from-pink-500 hover:to-purple-500 active:scale-95 text-white font-black py-4 px-8 rounded-full shadow-[0_8px_20px_rgba(244,114,182,0.5)] transform transition-all text-xl">
+                    Играть!
+                </button>
+            </div>
+        </div>
+
+        <!-- ================= GAME SCREEN ================= -->
+        <div id="game-screen" class="absolute inset-0 flex flex-col pointer-events-none transition-opacity duration-500 z-10" style="opacity: 0; display: none;">
+            
+            <!-- Back Button -->
+            <button id="game-back-btn" class="absolute top-6 left-6 p-3 bg-white/70 backdrop-blur-md rounded-full shadow-lg hover:bg-white hover:scale-105 active:scale-95 transition-all text-pink-500 border-2 border-pink-200 z-30 pointer-events-auto">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12"></line>
+                    <polyline points="12 19 5 12 12 5"></polyline>
+                </svg>
+            </button>
+
+            <!-- Game Top Bar with Timer -->
+            <div class="w-full flex justify-center items-center pt-4 pb-2 z-20">
+                <div id="timer-badge" class="bg-white/80 backdrop-blur-md px-5 py-2 rounded-full shadow-md border border-pink-200 flex items-center gap-2 transition-opacity duration-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-pink-500">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                    <span id="game-timer" class="text-lg font-black text-gray-700 tracking-wider font-mono">0s</span>
+                </div>
+            </div>
+
+            <!-- Top Half: English Zone -->
+            <div id="eng-zone" class="flex-1 w-full flex flex-wrap justify-center items-center content-center p-3 gap-2 pb-6 relative z-10">
+                <!-- English Oval Bubbles dynamically inserted here -->
+            </div>
+            
+            <!-- Middle Divider -->
+            <div class="w-full h-[3px] bg-gradient-to-r from-transparent via-white/80 to-transparent z-20 shadow-[0_0_10px_rgba(255,255,255,0.5)]"></div>
+            
+            <!-- Bottom Half: Russian Zone -->
+            <div id="ru-zone" class="flex-1 w-full flex flex-wrap justify-center items-center content-center p-3 gap-2 bg-white/20 backdrop-blur-md rounded-t-[3rem] shadow-[0_-15px_30px_rgba(0,0,0,0.05)] border-t-2 border-white/60 pt-6 relative z-10">
+                <!-- Russian Oval Bubbles dynamically inserted here -->
+            </div>
+        </div>
+
+        <!-- ================= RESULT SCREEN ================= -->
+        <div id="result-screen" class="absolute inset-0 flex flex-col items-center justify-center p-6 z-30 transition-opacity duration-500 bg-white/40 backdrop-blur-lg" style="opacity: 0; display: none; pointer-events: none;">
+             
+             <!-- Happy Wise Pink Owl (Static) -->
+             <div class="mb-4">
+                <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" class="w-48 h-48 mx-auto drop-shadow-2xl">
+                    <g id="wise-pink-owl-happy">
+                        <!-- Ear Tufts -->
+                        <path d="M 50 60 C 30 30, 40 20, 60 40 Z" fill="#DB2777" />
+                        <path d="M 150 60 C 170 30, 160 20, 140 40 Z" fill="#DB2777" />
+                        
+                        <!-- Body -->
+                        <path d="M 40 90 C 40 40, 160 40, 160 90 C 160 150, 140 180, 100 180 C 60 180, 40 150, 40 90 Z" fill="#F9A8D4" />
+                        
+                        <!-- Belly -->
+                        <path d="M 60 100 C 60 70, 140 70, 140 100 C 140 160, 120 170, 100 170 C 80 170, 60 160, 60 100 Z" fill="#FCE7F3" />
+                        
+                        <!-- Wings -->
+                        <path d="M 40 90 C 20 110, 25 150, 50 160 C 40 140, 45 110, 40 90 Z" fill="#F472B6" />
+                        <path d="M 160 90 C 180 110, 175 150, 150 160 C 160 140, 155 110, 160 90 Z" fill="#F472B6" />
+
+                        <!-- Glasses -->
+                        <circle cx="75" cy="85" r="22" fill="none" stroke="#FBBF24" stroke-width="4" />
+                        <circle cx="125" cy="85" r="22" fill="none" stroke="#FBBF24" stroke-width="4" />
+                        <path d="M 97 85 L 103 85" stroke="#FBBF24" stroke-width="4" />
+
+                        <!-- Happy Eyes -->
+                        <path d="M 60 85 C 70 75, 80 75, 90 85" fill="none" stroke="#1F2937" stroke-width="5" stroke-linecap="round" />
+                        <path d="M 110 85 C 120 75, 130 75, 140 85" fill="none" stroke="#1F2937" stroke-width="5" stroke-linecap="round" />
+
+                        <!-- Beak -->
+                        <path d="M 92 95 L 108 95 L 100 115 Z" fill="#F59E0B" />
+
+                        <!-- Feet -->
+                        <path d="M 70 175 C 75 185, 85 185, 90 175 Z" fill="#F59E0B" />
+                        <path d="M 110 175 C 115 185, 125 185, 130 175 Z" fill="#F59E0B" />
+                    </g>
+                </svg>
+            </div>
+            
+            <div class="bg-white rounded-[2rem] p-6 shadow-2xl max-w-sm w-full text-center border-4 border-green-300">
+                <h1 class="text-2xl font-black text-green-500 mb-1">Молодец!</h1>
+                <p id="motivational-text" class="text-base text-gray-700 font-bold mb-4">
+                    Ты отлично справился!
+                </p>
+                
+                <!-- Record Announcement Banner -->
+                <div id="record-banner" class="hidden bg-amber-100 border-2 border-amber-300 text-amber-800 rounded-xl p-2 mb-4 font-black text-xs animate-bounce shadow-sm">
+                    🏆 Новый рекорд скорости!
+                </div>
+
+                <!-- Stats Grid with uniform figure sizes -->
+                <div class="grid grid-cols-2 gap-3 mb-4">
+                    <div class="bg-green-50 rounded-2xl p-3 border border-green-100 shadow-inner flex flex-col justify-between">
+                        <p class="text-[10px] text-green-800 font-bold uppercase tracking-widest leading-tight mb-1 opacity-80">верно с первой<br>попытки</p>
+                        <div class="flex items-center justify-center gap-0.5">
+                            <span id="score-text" class="text-2xl font-black text-green-600">8</span>
+                            <span id="total-score" class="text-2xl font-black text-green-600">/8</span>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-blue-50 rounded-2xl p-3 border border-blue-100 shadow-inner flex flex-col justify-between">
+                        <p class="text-[10px] text-blue-800 font-bold uppercase tracking-widest leading-tight mb-1 opacity-80">среднее время<br>на слово</p>
+                        <div class="flex items-center justify-center h-full">
+                            <span id="time-per-word-text" class="text-2xl font-black text-blue-600">0.00s</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Time details on separate lines without brackets -->
+                <div class="text-xs text-gray-500 font-semibold mb-5 space-y-1 text-left px-2">
+                    <div>общее время: <span id="total-time-text" class="font-bold text-gray-700">0.00с</span></div>
+                    <div>лучшее время: <span id="best-time-per-word-text" class="font-bold text-pink-500">--</span></div>
+                </div>
+                
+                <button id="home-btn" class="w-full bg-gradient-to-r from-blue-400 to-indigo-400 hover:from-blue-500 hover:to-indigo-500 active:scale-95 text-white font-black py-3 px-8 rounded-full shadow-[0_8px_20px_rgba(96,165,250,0.5)] transform transition-all text-lg">
+                    На главную
+                </button>
+            </div>
+        </div>
+
+        <!-- ================= SETTINGS SCREEN ================= -->
+        <div id="settings-screen" class="absolute inset-0 flex flex-col items-center justify-center p-6 z-40 transition-opacity duration-300 bg-white/40 backdrop-blur-lg" style="opacity: 0; display: none; pointer-events: none;">
+            <div class="bg-white/95 rounded-[2rem] p-8 w-full max-w-sm shadow-2xl relative border-4 border-pink-300">
+                <h2 class="text-3xl font-black text-pink-500 mb-8 text-center tracking-tight">Настройки</h2>
+                
+                <!-- Font Size Setting -->
+                <div class="mb-8">
+                    <label class="block text-gray-700 font-bold mb-3 flex justify-between items-end">
+                        Размер шрифта <span id="font-size-val" class="text-pink-500 text-sm bg-pink-100 px-2 py-1 rounded-lg">Средний</span>
+                    </label>
+                    <input type="range" id="font-size-slider" min="1" max="5" value="3" class="w-full h-3 bg-pink-100 rounded-lg appearance-none cursor-pointer accent-pink-500">
+                    <div class="flex justify-between text-xs text-gray-400 mt-2 px-1 font-bold">
+                        <span>A</span>
+                        <span class="text-lg leading-none">A</span>
+                    </div>
+                </div>
+
+                <!-- Number of Pairs Setting -->
+                <div class="mb-10">
+                    <label class="block text-gray-700 font-bold mb-3 flex justify-between items-end">
+                        Количество пар <span id="pair-count-val" class="text-pink-500 text-sm bg-pink-100 px-2 py-1 rounded-lg">10</span>
+                    </label>
+                    <input type="range" id="pair-count-slider" min="4" max="25" value="10" class="w-full h-3 bg-pink-100 rounded-lg appearance-none cursor-pointer accent-pink-500">
+                    <div class="flex justify-between text-xs text-gray-400 mt-2 px-1 font-bold">
+                        <span>4</span>
+                        <span>25</span>
+                    </div>
+                </div>
+
+                <!-- Timer Toggle Setting -->
+                <div class="mb-10 flex justify-between items-center">
+                    <label class="text-gray-700 font-bold">Таймер на экране</label>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="timer-toggle" class="sr-only peer" checked>
+                        <div class="w-11 h-6 bg-pink-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-pink-500"></div>
+                    </label>
+                </div>
+
+                <button id="close-settings-btn" class="w-full bg-gradient-to-r from-pink-400 to-purple-400 hover:from-pink-500 hover:to-purple-500 active:scale-95 text-white font-black py-4 px-8 rounded-full shadow-[0_8px_20px_rgba(244,114,182,0.5)] transform transition-all text-xl">
+                    Готово
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- NATIVE LOCALSTORAGE SETUP ---
+        const storageKey = 'language-bubbles-settings';
+
+        function saveSettings() {
+            try {
+                localStorage.setItem(storageKey, JSON.stringify({
+                    fontSizeLevel: currentFontSizeLevel,
+                    targetRoundSize: TARGET_ROUND_SIZE,
+                    bestTimePerWord: bestTimePerWord,
+                    timerVisible: timerVisible
+                }));
+            } catch (error) {
+                console.error("Failed to save settings to localStorage:", error);
+            }
+        }
+
+        function loadSettings() {
+            try {
+                const dataStr = localStorage.getItem(storageKey);
+                if (dataStr) {
+                    const data = JSON.parse(dataStr);
+                    if (data.fontSizeLevel) {
+                        currentFontSizeLevel = data.fontSizeLevel;
+                        if (typeof fontSizeSlider !== 'undefined') {
+                            fontSizeSlider.value = currentFontSizeLevel;
+                            const labels = {1: 'Очень мелкий', 2: 'Мелкий', 3: 'Средний', 4: 'Крупный', 5: 'Огромный'};
+                            fontSizeVal.textContent = labels[currentFontSizeLevel];
+                        }
+                    }
+                    if (data.targetRoundSize) {
+                        TARGET_ROUND_SIZE = data.targetRoundSize;
+                        if (typeof pairCountSlider !== 'undefined') {
+                            pairCountSlider.value = TARGET_ROUND_SIZE;
+                            pairCountVal.textContent = TARGET_ROUND_SIZE;
+                        }
+                    }
+                    if (data.bestTimePerWord !== undefined && data.bestTimePerWord !== null) {
+                        bestTimePerWord = data.bestTimePerWord;
+                    }
+                    if (data.timerVisible !== undefined) {
+                        timerVisible = data.timerVisible;
+                        if (typeof timerToggle !== 'undefined') {
+                            timerToggle.checked = timerVisible;
+                        }
+                    }
+                }
+                
+                // Load SRS data correctly
+                const srsStr = localStorage.getItem('language-bubbles-srs');
+                if (srsStr) {
+                    srsData = JSON.parse(srsStr);
+                }
+            } catch (error) {
+                console.error("Failed to load settings from localStorage:", error);
+            }
+        }
+
+        // --- GAME DATA ---
+        const allWordPairs = [
+{ id: 1, en: "yesterday", ru: " вчера" },
+{ id: 2, en: "all", ru: " все" },
+{ id: 3, en: "my", ru: " мои" },
+{ id: 4, en: "troubles", ru: " неприятности" },
+{ id: 5, en: "seemed", ru: " казались" },
+{ id: 6, en: "so", ru: " так" },
+{ id: 7, en: "so", ru: " поэтому" },
+{ id: 8, en: "far", ru: " далеко" },
+{ id: 9, en: "away", ru: " прочь" },
+{ id: 10, en: "now", ru: " сейчас" },
+{ id: 11, en: "it", ru: " это" },
+{ id: 12, en: "looks", ru: " выглядит" },
+{ id: 13, en: "as", ru: " как" },
+{ id: 14, en: "as", ru: " пока" },
+{ id: 15, en: "though", ru: " будто" },
+{ id: 16, en: "they're", ru: " они" },
+{ id: 17, en: "here", ru: " здесь" },
+{ id: 18, en: "to", ru: " чтобы" },
+{ id: 19, en: "to", ru: " в" },
+{ id: 20, en: "stay", ru: " остаться" },
+{ id: 21, en: "I", ru: " я" },
+{ id: 22, en: "believe", ru: " верю" },
+{ id: 23, en: "in", ru: " в" },
+{ id: 24, en: "in", ru: " внутрь" },
+{ id: 25, en: "suddenly", ru: " внезапно" },
+{ id: 26, en: "I'm", ru: " я" },
+{ id: 27, en: "not", ru: " не" },
+{ id: 28, en: "half", ru: " половина" },
+{ id: 29, en: "the", ru: " этот" },
+{ id: 30, en: "man", ru: " мужчина" },
+{ id: 31, en: "man", ru: " человек" },
+{ id: 32, en: "used", ru: " привык" },
+{ id: 33, en: "be", ru: " быть" },
+{ id: 34, en: "there's", ru: " там есть" },
+{ id: 35, en: "a", ru: " какой-то" },
+{ id: 36, en: "a", ru: " один" },
+{ id: 37, en: "shadow", ru: " тень" },
+{ id: 38, en: "hangin'", ru: " висящий (разг.)" },
+{ id: 39, en: "over", ru: " над" },
+{ id: 40, en: "me", ru: " мной" },
+{ id: 41, en: "me", ru: " меня" },
+{ id: 42, en: "came", ru: " пришла" },
+{ id: 43, en: "why", ru: " почему" },
+{ id: 44, en: "she", ru: " она" },
+{ id: 45, en: "had", ru: " должна была" },
+{ id: 46, en: "go", ru: " идти" },
+{ id: 47, en: "go", ru: " иди" },
+{ id: 48, en: "don't", ru: " не" },
+{ id: 49, en: "know", ru: " знаю" },
+{ id: 50, en: "know", ru: " знаешь" },
+{ id: 51, en: "wouldn't", ru: " не стала бы" },
+{ id: 52, en: "say", ru: " сказать" },
+{ id: 53, en: "said", ru: " сказал" },
+{ id: 54, en: "something", ru: " что-то" },
+{ id: 55, en: "wrong", ru: " неправильное" },
+{ id: 56, en: "long", ru: " тоскую" },
+{ id: 57, en: "for", ru: " по" },
+{ id: 58, en: "for", ru: " для" },
+{ id: 59, en: "love", ru: " любовь" },
+{ id: 60, en: "was", ru: " была" },
+{ id: 61, en: "was", ru: " был" },
+{ id: 62, en: "such", ru: " такой" },
+{ id: 63, en: "an", ru: " какой-то" },
+{ id: 64, en: "easy", ru: " легкая" },
+{ id: 65, en: "game", ru: " игра" },
+{ id: 66, en: "play", ru: " играть" },
+{ id: 67, en: "need", ru: " нуждаюсь" },
+{ id: 68, en: "need", ru: " нужно" },
+{ id: 69, en: "need", ru: " нуждаешься" },
+{ id: 70, en: "place", ru: " место" },
+{ id: 71, en: "hide", ru: " спрятаться" },
+{ id: 72, en: "town", ru: " город" },
+{ id: 73, en: "where", ru: " где" },
+{ id: 74, en: "born", ru: " рожденный" },
+{ id: 75, en: "lived", ru: " жил" },
+{ id: 76, en: "who", ru: " который" },
+{ id: 77, en: "sailed", ru: " плавал" },
+{ id: 78, en: "sea", ru: " море" },
+{ id: 79, en: "and", ru: " и" },
+{ id: 80, en: "he", ru: " он" },
+{ id: 81, en: "told", ru: " рассказал" },
+{ id: 82, en: "us", ru: " нам" },
+{ id: 83, en: "his", ru: " его" },
+{ id: 84, en: "life", ru: " жизнь" },
+{ id: 85, en: "land", ru: " земля" },
+{ id: 86, en: "submarines", ru: " подводные лодки" },
+{ id: 87, en: "we", ru: " мы" },
+{ id: 88, en: "on", ru: " дальше" },
+{ id: 89, en: "on", ru: " на" },
+{ id: 90, en: "sun", ru: " солнце" },
+{ id: 91, en: "'til", ru: " до (разг.)" },
+{ id: 92, en: "found", ru: " нашли" },
+{ id: 93, en: "found", ru: " нашел" },
+{ id: 94, en: "green", ru: " зеленый" },
+{ id: 95, en: "beneath", ru: " под" },
+{ id: 96, en: "waves", ru: " волны" },
+{ id: 97, en: "our", ru: " наш" },
+{ id: 98, en: "yellow", ru: " желтый" },
+{ id: 99, en: "submarine", ru: " подводная лодка" },
+{ id: 100, en: "live", ru: " живем" },
+{ id: 101, en: "friends", ru: " друзья" },
+{ id: 102, en: "are", ru: " есть" },
+{ id: 103, en: "aboard", ru: " на борту" },
+{ id: 104, en: "many", ru: " много" },
+{ id: 105, en: "more", ru: " еще" },
+{ id: 106, en: "them", ru: " них" },
+{ id: 107, en: "next", ru: " соседний" },
+{ id: 108, en: "door", ru: " дверь" },
+{ id: 109, en: "band", ru: " оркестр" },
+{ id: 110, en: "begins", ru: " начинает" },
+{ id: 111, en: "full", ru: " полный" },
+{ id: 112, en: "steam", ru: " пар" },
+{ id: 113, en: "ahead", ru: " вперед" },
+{ id: 114, en: "is", ru: " есть" },
+{ id: 115, en: "cut", ru: " руби" },
+{ id: 116, en: "cable", ru: " трос" },
+{ id: 117, en: "drop", ru: " бросай" },
+{ id: 118, en: "sir", ru: " сэр" },
+{ id: 119, en: "ease", ru: " беззаботность" },
+{ id: 120, en: "every", ru: " каждый" },
+{ id: 121, en: "one", ru: " один" },
+{ id: 122, en: "has", ru: " имеет" },
+{ id: 123, en: "sky", ru: " небо" },
+{ id: 124, en: "blue", ru: " синий" },
+{ id: 125, en: "make", ru: " делать" },
+{ id: 126, en: "bad", ru: " плохим" },
+{ id: 127, en: "take", ru: " возьми" },
+{ id: 128, en: "sad", ru: " грустную" },
+{ id: 129, en: "song", ru: " песню" },
+{ id: 130, en: "better", ru: " лучше" },
+{ id: 131, en: "remember", ru: " помни" },
+{ id: 132, en: "let", ru: " позволь" },
+{ id: 133, en: "her", ru: " её" },
+{ id: 134, en: "into", ru: " в" },
+{ id: 135, en: "your", ru: " твой" },
+{ id: 136, en: "heart", ru: " сердце" },
+{ id: 137, en: "then", ru: " тогда" },
+{ id: 138, en: "you", ru: " ты" },
+{ id: 139, en: "can", ru: " можешь" },
+{ id: 140, en: "start", ru: " начать" },
+{ id: 141, en: "afraid", ru: " бояться" },
+{ id: 142, en: "were", ru: " был" },
+{ id: 143, en: "made", ru: " создан" },
+{ id: 144, en: "out", ru: " наружу" },
+{ id: 145, en: "get", ru: " забрать" },
+{ id: 146, en: "minute", ru: " минута" },
+{ id: 147, en: "under", ru: " под" },
+{ id: 148, en: "skin", ru: " кожу" },
+{ id: 149, en: "begin", ru: " начинай" },
+{ id: 150, en: "anytime", ru: " в любое время" },
+{ id: 151, en: "feel", ru: " чувствуешь" },
+{ id: 152, en: "pain", ru: " боль" },
+{ id: 153, en: "refrain", ru: " воздержись" },
+{ id: 154, en: "carry", ru: " неси" },
+{ id: 155, en: "world", ru: " мир" },
+{ id: 156, en: "upon", ru: " на" },
+{ id: 157, en: "shoulders", ru: " плечи" },
+{ id: 158, en: "well", ru: " хорошо" },
+{ id: 159, en: "that", ru: " что" },
+{ id: 160, en: "it's", ru: " это" },
+{ id: 161, en: "fool", ru: " дурак" },
+{ id: 162, en: "plays", ru: " играет" },
+{ id: 163, en: "cool", ru: " крутым (разг.)" },
+{ id: 164, en: "by", ru: " путем" },
+{ id: 165, en: "making", ru: " делая" },
+{ id: 166, en: "little", ru: " немного" },
+{ id: 167, en: "colder", ru: " холоднее" },
+{ id: 168, en: "down", ru: " вниз" },
+{ id: 169, en: "have", ru: " имеешь" },
+{ id: 170, en: "you're", ru: " ты есть" },
+{ id: 171, en: "waiting", ru: " ждешь" },
+{ id: 172, en: "someone", ru: " кого-то" },
+{ id: 173, en: "perform", ru: " выступать" },
+{ id: 174, en: "with", ru: " с" },
+{ id: 175, en: "just", ru: " просто" },
+{ id: 176, en: "you'll", ru: " ты будешь" },
+{ id: 177, en: "do", ru: " сделаешь" },
+{ id: 178, en: "movement", ru: " движение" },
+{ id: 179, en: "shoulder", ru: " плечо" },
+{ id: 180, en: "sad song", ru: " грустную песню" },
+{ id: 181, en: "make it better", ru: " сделай это лучше" },
+{ id: 182, en: "your heart", ru: " твое сердце" },
+{ id: 183, en: "dont be afraid", ru: " не бойся" },
+{ id: 184, en: "under your skin", ru: " под твою кожу" },
+{ id: 185, en: "feel the pain", ru: " чувствуешь боль" },
+{ id: 186, en: "carry the world", ru: " неси мир" },
+{ id: 187, en: "upon your shoulders", ru: " на твоих плечах" },
+{ id: 188, en: "well you know", ru: " ты хорошо знаешь" },
+{ id: 189, en: "plays it cool", ru: " ведет себя невозмутимо" },
+{ id: 190, en: "little colder", ru: " немного холоднее" },
+{ id: 191, en: "waiting for someone", ru: " ждешь кого-то" },
+{ id: 192, en: "perform with", ru: " выступать с" },
+{ id: 193, en: "just you", ru: " просто ты" },
+{ id: 194, en: "on your shoulder", ru: " на твоем плече" },
+{ id: 195, en: "sailed to sea", ru: " плавал в море" },
+{ id: 196, en: "told us", ru: " рассказал нам" },
+{ id: 197, en: "his life", ru: " его жизнь" },
+{ id: 198, en: "sea of green", ru: " зеленое море" },
+{ id: 199, en: "beneath the waves", ru: " под волнами" },
+{ id: 200, en: "all live", ru: " все живем" },
+{ id: 201, en: "our friends", ru: " наши друзья" },
+{ id: 202, en: "all aboard", ru: " все на борту" },
+{ id: 203, en: "live next door", ru: " живут по соседству" },
+{ id: 204, en: "begins to play", ru: " начинает играть" },
+{ id: 205, en: "full steam ahead", ru: " полный вперед" },
+{ id: 206, en: "cut the cable", ru: " руби трос" },
+{ id: 207, en: "drop the cable", ru: " бросай трос" },
+{ id: 208, en: "life of ease", ru: " беззаботная жизнь" },
+{ id: 209, en: "every one", ru: " каждый" },
+{ id: 210, en: "all we need", ru: " все необходимое" },
+{ id: 211, en: "sky of blue", ru: " голубое небо" },
+{ id: 212, en: "all my troubles", ru: " все мои неприятности" },
+{ id: 213, en: "far away", ru: " далеко" },
+{ id: 214, en: "here to stay", ru: " здесь надолго" },
+{ id: 215, en: "believe in yesterday", ru: " верю во вчерашний день" },
+{ id: 216, en: "half the man", ru: " не тот человек" },
+{ id: 217, en: "used to be", ru: " был раньше" },
+{ id: 218, en: "hangin' over me", ru: " нависает надо мной" },
+{ id: 219, en: "came suddenly", ru: " пришла внезапно" },
+{ id: 220, en: "had to go", ru: " должна была уйти" },
+{ id: 221, en: "don't know", ru: " не знаю" },
+{ id: 222, en: "wouldn't say", ru: " не сказала бы" },
+{ id: 223, en: "said something wrong", ru: " сказал не то" },
+{ id: 224, en: "long for yesterday", ru: " тоскую по прошлому" },
+{ id: 225, en: "easy game", ru: " легкая игра" },
+{ id: 226, en: "place to hide", ru: " место чтобы спрятаться" },
+{ id: 227, en: "hide away", ru: " спрятаться" },
+{ id: 228, en: "meditation", ru: " медитация" },
+{ id: 229, en: "those", ru: " те" },
+{ id: 230, en: "never", ru: " никогда" },
+{ id: 231, en: "suspect", ru: " подозревают" },
+{ id: 232, en: "doesn't", ru: " не" },
+{ id: 233, en: "for", ru: " ради" },
+{ id: 234, en: "money", ru: " деньги" },
+{ id: 235, en: "wins", ru: " выигрывает" },
+{ id: 236, en: "respect", ru: " уважение" },
+{ id: 237, en: "find", ru: " найти" },
+{ id: 238, en: "answer", ru: " ответ" },
+{ id: 239, en: "sacred", ru: " священная" },
+{ id: 240, en: "geometry", ru: " геометрия" },
+{ id: 241, en: "of", ru: " из" },
+{ id: 242, en: "chance", ru: " шанс" },
+{ id: 243, en: "hidden", ru: " скрытый" },
+{ id: 244, en: "law", ru: " закон" },
+{ id: 245, en: "probable", ru: " вероятный" },
+{ id: 246, en: "outcome", ru: " исход" },
+{ id: 247, en: "numbers", ru: " числа" },
+{ id: 248, en: "lead", ru: " ведут" },
+{ id: 249, en: "dance", ru: " танец" },
+{ id: 250, en: "spades", ru: " пики" },
+{ id: 251, en: "are", ru: " являются" },
+{ id: 252, en: "swords", ru: " мечи" },
+{ id: 253, en: "soldier", ru: " солдат" },
+{ id: 254, en: "clubs", ru: " трефы" },
+{ id: 255, en: "weapons", ru: " оружие" },
+{ id: 256, en: "war", ru: " война" },
+{ id: 257, en: "diamonds", ru: " бубны" },
+{ id: 258, en: "mean", ru: " означают" },
+{ id: 259, en: "this", ru: " этот" },
+{ id: 260, en: "art", ru: " искусство" },
+{ id: 261, en: "but", ru: " но" },
+{ id: 262, en: "that's", ru: " это" },
+{ id: 263, en: "shape", ru: " форма" },
+{ id: 264, en: "my", ru: " мой" },
+{ id: 265, en: "may", ru: " может" },
+{ id: 266, en: "jack", ru: " валет" },
+{ id: 267, en: "lay", ru: " положить" },
+{ id: 268, en: "queen", ru: " дама" },
+{ id: 269, en: "conceal", ru: " скрывать" },
+{ id: 270, en: "king", ru: " король" },
+{ id: 271, en: "hand", ru: " рука" },
+{ id: 272, en: "while", ru: " пока" },
+{ id: 273, en: "memory", ru: " память" },
+{ id: 274, en: "it", ru: " оно" },
+{ id: 275, en: "fades", ru: " угасает" },
+{ id: 276, en: "if", ru: " если" },
+{ id: 277, en: "told", ru: " сказал" },
+{ id: 278, en: "loved", ru: " любил" },
+{ id: 279, en: "you'd", ru: " ты бы" },
+{ id: 280, en: "maybe", ru: " может быть" },
+{ id: 281, en: "think", ru: " думать" },
+{ id: 282, en: "there's", ru: " есть" },
+{ id: 283, en: "wrong", ru: " неправильно" },
+{ id: 284, en: "too", ru: " слишком" },
+{ id: 285, en: "faces", ru: " лица" },
+{ id: 286, en: "mask", ru: " маска" },
+{ id: 287, en: "wear", ru: " ношу" },
+{ id: 288, en: "is", ru: " является" },
+{ id: 289, en: "who", ru: " кто" },
+{ id: 290, en: "speak", ru: " говорят" },
+{ id: 291, en: "nothing", ru: " ничего" },
+{ id: 292, en: "their", ru: " их" },
+{ id: 293, en: "cost", ru: " цена" },
+{ id: 294, en: "like", ru: " как" },
+{ id: 295, en: "curse", ru: " проклинают" },
+{ id: 296, en: "luck", ru: " удача" },
+{ id: 297, en: "places", ru: " места" },
+{ id: 298, en: "fear", ru: " боятся" },
+{ id: 299, en: "lost", ru: " потеряны" },
+{ id: 300, en: "deals the cards", ru: " раздает карты" },
+{ id: 301, en: "sacred geometry", ru: " сакральная геометрия" },
+{ id: 302, en: "geometry of chance", ru: " геометрия шанса" },
+{ id: 303, en: "hidden law", ru: " скрытый закон" },
+{ id: 304, en: "probable outcome", ru: " вероятный исход" },
+{ id: 305, en: "lead a dance", ru: " ведут танец" },
+{ id: 306, en: "weapons of war", ru: " оружие войны" },
+{ id: 307, en: "jack of diamonds", ru: " бубновый валет" },
+{ id: 308, en: "queen of spades", ru: " пиковая дама" },
+{ id: 309, en: "conceal a king", ru: " скрывать короля" },
+{ id: 310, en: "in his hand", ru: " в его руке" },
+{ id: 311, en: "something wrong", ru: " ошибка" },
+{ id: 312, en: "too many faces", ru: " слишком много лиц" },
+{ id: 313, en: "know nothing", ru: " ничего не знают" },
+{ id: 314, en: "find out", ru: " выяснить" },
+{ id: 315, en: "to their cost", ru: " ценой для себя" },
+{ id: 316, en: "curse their luck", ru: " проклинают удачу" },
+{ id: 317, en: "too many places", ru: " слишком много мест" },
+{ id: 318, en: "are lost", ru: " потеряны" },
+{ id: 319, en: "my heart", ru: " мое сердце" },
+{ id: 320, en: "the shape", ru: " форма" },
+{ id: 321, en: "find the answer", ru: " найти ответ" },
+{ id: 322, en: "memory of it", ru: " память об этом" },
+{ id: 323, en: "it fades", ru: " оно угасает" },
+{ id: 324, en: "darling", ru: " дорогой" },
+{ id: 325, en: "i've", ru: " я имею" },
+{ id: 326, en: "hungered", ru: " голодал" },
+{ id: 327, en: "touch", ru: " прикосновение" },
+{ id: 328, en: "long", ru: " долгий" },
+{ id: 329, en: "lonely", ru: " одинокий" },
+{ id: 330, en: "time", ru: " время" },
+{ id: 331, en: "goes", ru: " идет" },
+{ id: 332, en: "by", ru: " мимо" },
+{ id: 333, en: "slowly", ru: " медленно" },
+{ id: 334, en: "can", ru: " может" },
+{ id: 335, en: "do", ru: " делать" },
+{ id: 336, en: "much", ru: " много" },
+{ id: 337, en: "are", ru: " являешься" },
+{ id: 338, en: "still", ru: " все еще" },
+{ id: 339, en: "mine", ru: " мой" },
+{ id: 340, en: "speed", ru: " ускори" },
+{ id: 341, en: "to", ru: " к" },
+{ id: 342, en: "me", ru: " мне" },
+{ id: 343, en: "rivers", ru: " реки" },
+{ id: 344, en: "flow", ru: " текут" },
+{ id: 345, en: "open", ru: " открытые" },
+{ id: 346, en: "arms", ru: " объятия" },
+{ id: 347, en: "sigh", ru: " вздыхают" },
+{ id: 348, en: "wait", ru: " жди" },
+{ id: 349, en: "coming", ru: " возвращающийся" },
+{ id: 350, en: "home", ru: " домой" },
+{ id: 351, en: "my love", ru: " моя любовь" },
+{ id: 352, en: "my darling", ru: " мой дорогой" },
+{ id: 353, en: "time goes by", ru: " время идет" },
+{ id: 354, en: "do so much", ru: " делать так много" },
+{ id: 355, en: "need your love", ru: " нужна твоя любовь" },
+{ id: 356, en: "God speed", ru: " бог в помощь" },
+{ id: 357, en: "to the sea", ru: " к морю" },
+{ id: 358, en: "open arms", ru: " открытые объятия" },
+{ id: 359, en: "arms of the sea", ru: " объятия моря" },
+{ id: 360, en: "wait for me", ru: " жди меня" },
+{ id: 361, en: "coming home", ru: " возвращаюсь домой" },
+{ id: 362, en: "got", ru: " имеет" },
+{ id: 363, en: "humour", ru: " юмор" },
+{ id: 364, en: "she's", ru: " она" },
+{ id: 365, en: "giggle", ru: " хихиканье" },
+{ id: 366, en: "at", ru: " на" },
+{ id: 367, en: "funeral", ru: " похороны" },
+{ id: 368, en: "knows", ru: " знает" },
+{ id: 369, en: "everybody's", ru: " каждого" },
+{ id: 370, en: "disapproval", ru: " неодобрение" },
+{ id: 371, en: "should've", ru: " должен был (разг.)" },
+{ id: 372, en: "worshipped", ru: " поклонялся" },
+{ id: 373, en: "her", ru: " ей" },
+{ id: 374, en: "sooner", ru: " раньше" },
+{ id: 375, en: "heavens", ru: " небеса" },
+{ id: 376, en: "ever", ru: " когда-либо" },
+{ id: 377, en: "did", ru: " действительно" },
+{ id: 378, en: "speak", ru: " говорить" },
+{ id: 379, en: "last", ru: " последний" },
+{ id: 380, en: "TRUE", ru: " истинный" },
+{ id: 381, en: "mouthpiece", ru: " глашатай" },
+{ id: 382, en: "sunday's", ru: " воскресенье" },
+{ id: 383, en: "gettin'", ru: " становится (разг.)" },
+{ id: 384, en: "more", ru: " более" },
+{ id: 385, en: "bleak", ru: " мрачный" },
+{ id: 386, en: "fresh", ru: " свежий" },
+{ id: 387, en: "poison", ru: " яд" },
+{ id: 388, en: "each", ru: " каждый" },
+{ id: 389, en: "week", ru: " неделя" },
+{ id: 390, en: "were", ru: " были" },
+{ id: 391, en: "born", ru: " рождены" },
+{ id: 392, en: "sick", ru: " больны" },
+{ id: 393, en: "heard", ru: " слышал" },
+{ id: 394, en: "them", ru: " их" },
+{ id: 395, en: "say", ru: " говорить" },
+{ id: 396, en: "church", ru: " церковь" },
+{ id: 397, en: "offers", ru: " предлагает" },
+{ id: 398, en: "no", ru: " никакой" },
+{ id: 399, en: "absolutes", ru: " абсолютности" },
+{ id: 400, en: "tells", ru: " говорит" },
+{ id: 401, en: "worship", ru: " поклоняйся" },
+{ id: 402, en: "bedroom", ru: " спальня" },
+{ id: 403, en: "only", ru: " единственный" },
+{ id: 404, en: "heaven", ru: " рай" },
+{ id: 405, en: "i'll", ru: " я буду" },
+{ id: 406, en: "sent", ru: " послан" },
+{ id: 407, en: "when", ru: " когда" },
+{ id: 408, en: "alone", ru: " один" },
+{ id: 409, en: "love", ru: " люблю" },
+{ id: 410, en: "command", ru: " прикажи" },
+{ id: 411, en: "well", ru: " здоров" },
+{ id: 412, en: "dog", ru: " собака" },
+{ id: 413, en: "shrine", ru: " святыня" },
+{ id: 414, en: "lies", ru: " ложь" },
+{ id: 415, en: "tell", ru: " скажи" },
+{ id: 416, en: "sins", ru: " грехи" },
+{ id: 417, en: "sharpen", ru: " точить" },
+{ id: 418, en: "knife", ru: " нож" },
+{ id: 419, en: "offer", ru: " предложи" },
+{ id: 420, en: "that", ru: " тот" },
+{ id: 421, en: "deathless", ru: " бессмертный" },
+{ id: 422, en: "death", ru: " смерть" },
+{ id: 423, en: "good", ru: " хороший" },
+{ id: 424, en: "give", ru: " дать" },
+{ id: 425, en: "pagan", ru: " язычник" },
+{ id: 426, en: "times", ru: " времена" },
+{ id: 427, en: "sunlight", ru: " солнечный свет" },
+{ id: 428, en: "keep", ru: " держать" },
+{ id: 429, en: "goddess", ru: " богиня" },
+{ id: 430, en: "side", ru: " сторона" },
+{ id: 431, en: "demands", ru: " требует" },
+{ id: 432, en: "sacrifice", ru: " жертва" },
+{ id: 433, en: "drain", ru: " осуши" },
+{ id: 434, en: "whole", ru: " весь" },
+{ id: 435, en: "get", ru: " достань" },
+{ id: 436, en: "somethin'", ru: " что-то (разг.)" },
+{ id: 437, en: "shiny", ru: " блестящий" },
+{ id: 438, en: "meaty", ru: " мясной" },
+{ id: 439, en: "main", ru: " главный" },
+{ id: 440, en: "course", ru: " блюдо" },
+{ id: 441, en: "fine", ru: " прекрасный" },
+{ id: 442, en: "lookin'", ru: " выглядящий (разг.)" },
+{ id: 443, en: "high", ru: " высокий" },
+{ id: 444, en: "horse", ru: " конь" },
+{ id: 445, en: "what", ru: " что" },
+{ id: 446, en: "stable", ru: " конюшня" },
+{ id: 447, en: "we've", ru: " мы имеем" },
+{ id: 448, en: "lot", ru: " много" },
+{ id: 449, en: "starvin'", ru: " голодающий (разг.)" },
+{ id: 450, en: "faithful", ru: " верующие" },
+{ id: 451, en: "tasty", ru: " вкусный" },
+{ id: 452, en: "plenty", ru: " много" },
+{ id: 453, en: "this", ru: " это" },
+{ id: 454, en: "hungry", ru: " голодный" },
+{ id: 455, en: "work", ru: " работа" },
+{ id: 456, en: "so", ru: " чтобы" },
+{ id: 457, en: "masters", ru: " господа" },
+{ id: 458, en: "or", ru: " или" },
+{ id: 459, en: "kings", ru: " короли" },
+{ id: 460, en: "ritual", ru: " ритуал" },
+{ id: 461, en: "begins", ru: " начинается" },
+{ id: 462, en: "there", ru: " там" },
+{ id: 463, en: "sweeter", ru: " слаще" },
+{ id: 464, en: "innocence", ru: " невинность" },
+{ id: 465, en: "than", ru: " чем" },
+{ id: 466, en: "gentle", ru: " нежный" },
+{ id: 467, en: "sin", ru: " грех" },
+{ id: 468, en: "madness", ru: " безумие" },
+{ id: 469, en: "soil", ru: " почва" },
+{ id: 470, en: "sad", ru: " грустный" },
+{ id: 471, en: "earthly", ru: " земной" },
+{ id: 472, en: "scene", ru: " сцена" },
+{ id: 473, en: "am", ru: " являюсь" },
+{ id: 474, en: "human", ru: " человек" },
+{ id: 475, en: "clean", ru: " чист" },
+{ id: 476, en: "each week", ru: " каждую неделю" },
+{ id: 477, en: "born sick", ru: " рожден больным" },
+{ id: 478, en: "heard them", ru: " слышал их" },
+{ id: 479, en: "say it", ru: " говорить это" },
+{ id: 480, en: "in the bedroom", ru: " в спальне" },
+{ id: 481, en: "alone with you", ru: " наедине с тобой" },
+{ id: 482, en: "love it", ru: " люблю это" },
+{ id: 483, en: "be well", ru: " быть здоровым" },
+{ id: 484, en: "to church", ru: " в церковь" },
+{ id: 485, en: "your lies", ru: " твоя ложь" },
+{ id: 486, en: "my sins", ru: " мои грехи" },
+{ id: 487, en: "sharpen your knife", ru: " точи свой нож" },
+{ id: 488, en: "my life", ru: " моя жизнь" },
+{ id: 489, en: "good times", ru: " хорошие времена" },
+{ id: 490, en: "the sunlight", ru: " солнечный свет" },
+{ id: 491, en: "demands a sacrifice", ru: " требует жертву" },
+{ id: 492, en: "whole sea", ru: " всё море" },
+{ id: 493, en: "main course", ru: " основное блюдо" },
+{ id: 494, en: "in the stable", ru: " в конюшне" },
+{ id: 495, en: "looks tasty", ru: " выглядит вкусно" },
+{ id: 496, en: "no masters", ru: " нет господ" },
+{ id: 497, en: "ritual begins", ru: " ритуал начинается" },
+{ id: 498, en: "gentle sin", ru: " нежный грех" },
+{ id: 499, en: "only then", ru: " только тогда" }
+        ];
+
+        // --- GAME STATE ---
+        let TARGET_ROUND_SIZE = 10;
+        let currentFontSizeLevel = 3;
+        let timerVisible = true;
+        let currentRoundPairs = [];
+        let selectedBubble = null;
+        let matchedCount = 0;
+        let firstTryMatches = 0;
+        let mistakes = new Set();
+        let srsData = {}; // Stores SRS intervals and due dates
+
+        // Timer State
+        let startTime = 0;
+        let timerInterval = null;
+        let elapsedTime = 0;
+        let bestTimePerWord = null;
+
+        // DOM Elements
+        const screens = {
+            home: document.getElementById('home-screen'),
+            game: document.getElementById('game-screen'),
+            result: document.getElementById('result-screen'),
+            settings: document.getElementById('settings-screen')
+        };
+        const engZone = document.getElementById('eng-zone');
+        const ruZone = document.getElementById('ru-zone');
+        const scoreText = document.getElementById('score-text');
+        const totalScoreElement = document.getElementById('total-score');
+        const motivationalText = document.getElementById('motivational-text');
+        const gameTimerEl = document.getElementById('game-timer');
+        const totalTimeTextEl = document.getElementById('total-time-text');
+        const timePerWordTextEl = document.getElementById('time-per-word-text');
+        const bestTimePerWordTextEl = document.getElementById('best-time-per-word-text');
+        const recordBannerEl = document.getElementById('record-banner');
+        const timerBadge = document.getElementById('timer-badge');
+        const srsEmptyMsg = document.getElementById('srs-empty-msg');
+
+        const startBtn = document.getElementById('start-btn');
+        const homeBtn = document.getElementById('home-btn');
+        const gameBackBtn = document.getElementById('game-back-btn');
+        const settingsBtn = document.getElementById('settings-btn');
+        const closeSettingsBtn = document.getElementById('close-settings-btn');
+        const fontSizeSlider = document.getElementById('font-size-slider');
+        const fontSizeVal = document.getElementById('font-size-val');
+        const pairCountSlider = document.getElementById('pair-count-slider');
+        const pairCountVal = document.getElementById('pair-count-val');
+        const timerToggle = document.getElementById('timer-toggle');
+
+        function showScreen(screenName) {
+            Object.keys(screens).forEach(key => {
+                const el = screens[key];
+                if (key === screenName) {
+                    el.style.display = 'flex';
+                    setTimeout(() => {
+                        el.style.opacity = '1';
+                        el.style.pointerEvents = 'auto';
+                    }, 30);
+                } else {
+                    el.style.opacity = '0';
+                    el.style.pointerEvents = 'none';
+                    setTimeout(() => {
+                        if (el.style.opacity === '0') {
+                            el.style.display = 'none';
+                        }
+                    }, 500);
+                }
+            });
+        }
+
+        function speakEnglishWord(word) {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(word);
+                utterance.lang = 'en-US';
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        function startGame() {
+            selectedBubble = null;
+            matchedCount = 0;
+            firstTryMatches = 0;
+            mistakes.clear();
+            engZone.innerHTML = '';
+            ruZone.innerHTML = '';
+            srsEmptyMsg.classList.add('hidden');
+
+            timerBadge.style.opacity = timerVisible ? '1' : '0';
+            timerBadge.style.display = timerVisible ? 'flex' : 'none';
+
+            // SRS Logic: Separate into new and due cards
+            const now = Date.now();
+            const newCards = allWordPairs.filter(p => !srsData[p.id]);
+            const dueCards = allWordPairs.filter(p => srsData[p.id] && srsData[p.id].dueDate <= now);
+
+            if (newCards.length === 0 && dueCards.length === 0) {
+                srsEmptyMsg.classList.remove('hidden');
+                return; // Stop game from starting
+            }
+
+            let targetNew = Math.ceil(TARGET_ROUND_SIZE / 2);
+            let targetDue = Math.floor(TARGET_ROUND_SIZE / 2);
+
+            // Adjust targets if not enough cards in either category
+            if (newCards.length < targetNew) {
+                targetDue += (targetNew - newCards.length);
+                targetNew = newCards.length;
+            }
+            if (dueCards.length < targetDue) {
+                targetNew += (targetDue - dueCards.length);
+                targetDue = dueCards.length;
+            }
+
+            const selectedNew = shuffleArray([...newCards]).slice(0, targetNew);
+            const selectedDue = shuffleArray([...dueCards]).slice(0, targetDue);
+
+            currentRoundPairs = shuffleArray([...selectedNew, ...selectedDue]);
+
+            showScreen('game');
+
+            startTime = performance.now();
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                const now = performance.now();
+                elapsedTime = (now - startTime) / 1000;
+                gameTimerEl.textContent = Math.floor(elapsedTime) + 's';
+            }, 100);
+
+            function renderAndFit() {
+                engZone.innerHTML = '';
+                ruZone.innerHTML = '';
+
+                const engBubbles = currentRoundPairs.map(p => createBubble(p.en, p.id, 'en'));
+                const ruBubbles = currentRoundPairs.map(p => createBubble(p.ru, p.id, 'ru'));
+
+                shuffleArray(engBubbles).forEach(b => engZone.appendChild(b));
+                shuffleArray(ruBubbles).forEach(b => ruZone.appendChild(b));
+                
+                requestAnimationFrame(() => {
+                    const engOverflow = engZone.scrollHeight > engZone.clientHeight + 5;
+                    const ruOverflow = ruZone.scrollHeight > ruZone.clientHeight + 5;
+
+                    if ((engOverflow || ruOverflow) && currentRoundPairs.length > 4) {
+                        currentRoundPairs.pop();
+                        renderAndFit();
+                    } else {
+                        if (totalScoreElement) {
+                            totalScoreElement.textContent = `/${currentRoundPairs.length}`;
+                        }
+                    }
+                });
+            }
+
+            renderAndFit();
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        function createBubble(text, pairId, lang) {
+            const bubble = document.createElement('div');
+            
+            const fontClasses = {
+                1: 'text-xs md:text-sm px-4 py-1.5',
+                2: 'text-sm md:text-base px-4 py-2',
+                3: 'text-base md:text-lg px-5 py-2.5',
+                4: 'text-lg md:text-xl px-6 py-3',
+                5: 'text-xl md:text-2xl px-7 py-3.5'
+            };
+            const activeFontClass = fontClasses[currentFontSizeLevel] || fontClasses[3];
+            
+            // Allow wrapping for long phrases by using whitespace-normal and break-words instead of whitespace-nowrap
+            bubble.className = `bubble rounded-3xl ${activeFontClass}
+                                flex items-center justify-center text-center cursor-pointer 
+                                font-bold text-gray-800 leading-tight
+                                whitespace-normal break-words relative shadow-sm max-w-full`;
+            
+            const offsetX = Math.random() * 8 - 4;
+            const offsetY = Math.random() * 8 - 4;
+            bubble.style.margin = `${offsetY}px ${offsetX}px`;
+            
+            bubble.textContent = text;
+            bubble.dataset.pairId = pairId;
+            bubble.dataset.lang = lang;
+            
+            bubble.addEventListener('pointerdown', handleBubbleClick);
+            
+            return bubble;
+        }
+
+        function handleBubbleClick(e) {
+            e.preventDefault();
+            const bubble = e.currentTarget;
+
+            if (bubble.classList.contains('matched') || bubble === selectedBubble) {
+                return;
+            }
+
+            if (!selectedBubble) {
+                selectedBubble = bubble;
+                bubble.classList.add('selected');
+                return;
+            }
+
+            const pairId1 = parseInt(selectedBubble.dataset.pairId);
+            const pairId2 = parseInt(bubble.dataset.pairId);
+            const lang1 = selectedBubble.dataset.lang;
+            const lang2 = bubble.dataset.lang;
+
+            let isMatch = false;
+
+            if (lang1 !== lang2) {
+                if (pairId1 === pairId2) {
+                    isMatch = true;
+                } else {
+                    const pair1 = currentRoundPairs.find(p => p.id === pairId1);
+                    const pair2 = currentRoundPairs.find(p => p.id === pairId2);
+                    
+                    if (pair1 && pair2 && (pair1.en === pair2.en || pair1.ru === pair2.ru)) {
+                        isMatch = true;
+                    }
+                }
+            }
+
+            if (isMatch) {
+                if (!mistakes.has(pairId1)) {
+                    firstTryMatches++;
+                }
+
+                selectedBubble.classList.remove('selected');
+                selectedBubble.classList.add('matched');
+                bubble.classList.add('matched');
+
+                const matchedPair = currentRoundPairs.find(p => p.id === pairId1);
+                if (matchedPair) {
+                    speakEnglishWord(matchedPair.en);
+                }
+
+                createSplash(selectedBubble);
+                createSplash(bubble);
+
+                selectedBubble = null;
+                matchedCount++;
+
+                if (matchedCount === currentRoundPairs.length) {
+                    setTimeout(endGame, 1000);
+                }
+
+            } else {
+                mistakes.add(pairId1);
+
+                bubble.classList.add('wrong');
+                
+                setTimeout(() => {
+                    bubble.classList.remove('wrong');
+                }, 500);
+            }
+        }
+
+        function createSplash(element) {
+            const rect = element.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            const colors = ['#4ADE80', '#22C55E', '#16A34A', '#86EFAC'];
+            const particleCount = 12 + Math.random() * 5;
+
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'splash-particle shadow-sm';
+                
+                const size = 6 + Math.random() * 6; 
+                particle.style.width = `${size}px`;
+                particle.style.height = `${size}px`;
+                particle.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                particle.style.left = `${centerX}px`;
+                particle.style.top = `${centerY}px`;
+                
+                document.body.appendChild(particle);
+                
+                const angle = Math.random() * Math.PI * 2;
+                const velocity = 40 + Math.random() * 60;
+                const tx = Math.cos(angle) * velocity;
+                const ty = Math.sin(angle) * velocity;
+                
+                const animation = particle.animate([
+                    { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 },
+                    { transform: `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px)) scale(0)`, opacity: 0 }
+                ], {
+                    duration: 500 + Math.random() * 300,
+                    easing: 'cubic-bezier(0, 0.9, 0.57, 1)'
+                });
+                
+                animation.onfinish = () => particle.remove();
+            }
+        }
+
+        function endGame() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+
+            // Update SRS Data
+            const now = Date.now();
+            currentRoundPairs.forEach(pair => {
+                let record = srsData[pair.id] || { interval: 0, dueDate: 0 };
+                const isMistake = mistakes.has(pair.id);
+                
+                if (isMistake) {
+                    record.interval = 0.5; // Reset progress to 12 hours (0.5 days) if wrong
+                } else {
+                    // Double the interval if correct (1, 2, 4, 8...)
+                    record.interval = record.interval === 0 ? 1 : record.interval * 2;
+                }
+                
+                // Add interval to current time (1 day = 86,400,000 ms)
+                record.dueDate = now + (record.interval * 86400000);
+                srsData[pair.id] = record;
+            });
+            localStorage.setItem('language-bubbles-srs', JSON.stringify(srsData));
+
+            const totalTimeSec = elapsedTime;
+            const timePerWordSec = totalTimeSec / currentRoundPairs.length;
+
+            scoreText.textContent = firstTryMatches;
+            totalTimeTextEl.textContent = totalTimeSec.toFixed(2) + 'с';
+            timePerWordTextEl.textContent = timePerWordSec.toFixed(2) + 's';
+
+            let isNewRecord = false;
+            if (bestTimePerWord === null || timePerWordSec < bestTimePerWord) {
+                if (bestTimePerWord !== null) {
+                    isNewRecord = true;
+                }
+                bestTimePerWord = timePerWordSec;
+                saveSettings();
+            }
+
+            if (bestTimePerWord !== null) {
+                bestTimePerWordTextEl.textContent = bestTimePerWord.toFixed(2) + 's';
+            } else {
+                bestTimePerWordTextEl.textContent = '--';
+            }
+
+            if (isNewRecord) {
+                recordBannerEl.classList.remove('hidden');
+            } else {
+                recordBannerEl.classList.add('hidden');
+            }
+            
+            if (firstTryMatches === currentRoundPairs.length) {
+                motivationalText.textContent = "Идеально! Ни одной ошибки!";
+                motivationalText.className = "text-base font-black text-pink-500 mb-4";
+            } else if (firstTryMatches >= currentRoundPairs.length / 2) {
+                motivationalText.textContent = "Отличная работа! Продолжай в том же духе!";
+                motivationalText.className = "text-base text-gray-700 font-bold mb-4";
+            } else {
+                motivationalText.textContent = "Хорошая попытка! В следующий раз получится лучше!";
+                motivationalText.className = "text-base text-gray-700 font-bold mb-4";
+            }
+
+            showScreen('result');
+        }
+
+        // Event Listeners
+        startBtn.addEventListener('click', startGame);
+        homeBtn.addEventListener('click', () => showScreen('home'));
+        
+        gameBackBtn.addEventListener('click', () => {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            showScreen('home');
+        });
+
+        settingsBtn.addEventListener('click', () => showScreen('settings'));
+        closeSettingsBtn.addEventListener('click', () => showScreen('home'));
+
+        fontSizeSlider.addEventListener('input', (e) => {
+            currentFontSizeLevel = parseInt(e.target.value);
+            const labels = {1: 'Очень мелкий', 2: 'Мелкий', 3: 'Средний', 4: 'Крупный', 5: 'Огромный'};
+            fontSizeVal.textContent = labels[currentFontSizeLevel];
+            saveSettings();
+        });
+
+        pairCountSlider.addEventListener('input', (e) => {
+            TARGET_ROUND_SIZE = parseInt(e.target.value);
+            pairCountVal.textContent = TARGET_ROUND_SIZE;
+            saveSettings();
+        });
+
+        timerToggle.addEventListener('change', (e) => {
+            timerVisible = e.target.checked;
+            saveSettings();
+        });
+
+        // Load initial settings on startup
+        loadSettings();
+
+        // Attempt native orientation lock for installed PWAs (especially Android)
+        try {
+            if (screen.orientation && screen.orientation.lock) {
+                screen.orientation.lock('portrait').catch(e => {
+                    // Silently ignore: expected behavior on desktop or unsupported devices like iOS Safari
+                });
+            }
+        } catch(e) {}
+
+    </script>
+</body>
+</html>
