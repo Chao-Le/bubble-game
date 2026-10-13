@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Language Bubbles</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#fbcfe8">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Языковые Пузыри">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 fill=%22%23F9A8D4%22/><circle cx=%2235%22 cy=%2240%22 r=%2215%22 fill=%22white%22/><circle cx=%2265%22 cy=%2240%22 r=%2215%22 fill=%22white%22/><circle cx=%2235%22 cy=%2240%22 r=%225%22 fill=%22%231F2937%22/><circle cx=%2265%22 cy=%2240%22 r=%225%22 fill=%22%231F2937%22/><path d=%22M 45 55 L 55 55 L 50 65 Z%22 fill=%22%23F59E0B%22/></svg>">
+
+    <!-- Tailwind CSS for structural styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            /* Prevent scrolling and zooming for a native app feel */
+            overscroll-behavior: none;
+            touch-action: none;
+        }
+
+        .bubble {
+            /* 3D soap bubble effect */
+            background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9), rgba(240,248,255,0.7) 60%, rgba(200,220,255,0.5));
+            border: 1px solid rgba(255,255,255,0.8);
+            box-shadow: 
+                inset -5px -5px 15px rgba(0,0,0,0.05),
+                inset 5px 5px 15px rgba(255,255,255,0.9),
+                0 6px 12px rgba(0,0,0,0.1);
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s;
+        }
+
+        /* Stop float animation when selected */
+        .bubble.selected {
+            transform: scale(1.15) !important;
+            box-shadow: 
+                0 0 0 4px #FCD34D,
+                0 0 25px 8px rgba(252, 211, 77, 0.7),
+                inset -5px -5px 15px rgba(0,0,0,0.05),
+                inset 5px 5px 15px rgba(255,255,255,0.9);
+            border-color: transparent;
+            z-index: 50;
+        }
+
+        /* Error state: flashes red and shakes */
+        .bubble.wrong {
+            background: #FCA5A5 !important;
+            background-image: none !important;
+            border-color: #EF4444 !important;
+            color: white !important;
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both !important;
+        }
+
+        /* Success state: turns green, pops, and vanishes */
+        .bubble.matched {
+            background: #86EFAC !important;
+            background-image: none !important;
+            border-color: #22C55E !important;
+            color: #14532D !important;
+            animation: popOut 0.5s ease-out forwards !important;
+            pointer-events: none; /* Prevent clicking during pop */
+            z-index: 40;
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-2px, 0, 0); }
+            20%, 80% { transform: translate3d(4px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+            40%, 60% { transform: translate3d(6px, 0, 0); }
+        }
+
+        @keyframes popOut {
+            0% { transform: scale(1.15); opacity: 1; box-shadow: 0 0 20px #4ADE80; }
+            40% { transform: scale(1.3); opacity: 1; }
+            100% { transform: scale(1.6); opacity: 0; visibility: hidden; }
+        }
+
+        @keyframes wise-blink {
+            0%, 95%, 98%, 100% { transform: scaleY(1); }
+            96%, 99% { transform: scaleY(0.1); }
+        }
+
+        .wise-eye {
+            animation: wise-blink 4s infinite;
+        }
+        
+        /* Particle animation class applied via JS */
+        .splash-particle {
+            border-radius: 50%;
+            pointer-events: none;
+            position: absolute;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-indigo-100 via-purple-100 to-pink-100 h-screen w-screen overflow-hidden font-sans select-none">
+    
+    <div id="app" class="w-full h-full relative">
+        
+        <!-- Background: Magic Forest with Books -->
+        <svg id="magic-forest-bg" class="absolute inset-0 w-full h-full object-cover z-0 pointer-events-none opacity-40" preserveAspectRatio="xMidYMid slice" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="trunk1" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#4B5563" />
+                    <stop offset="100%" stop-color="#374151" />
+                </linearGradient>
+                <linearGradient id="leafGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                    <stop offset="0%" stop-color="#A7F3D0" stop-opacity="0.6"/>
+                    <stop offset="100%" stop-color="#059669" stop-opacity="0.4"/>
+                </linearGradient>
+                <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="5" result="blur" />
+                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                </filter>
+            </defs>
+            
+            <!-- Trunks -->
+            <path d="M 150 1000 C 180 700, 120 400, 150 0 L 220 0 C 180 400, 240 700, 200 1000 Z" fill="url(#trunk1)" />
+            <path d="M 800 1000 C 760 600, 820 300, 780 0 L 860 0 C 880 300, 820 600, 850 1000 Z" fill="url(#trunk1)" />
+            <path d="M 450 1000 C 480 800, 420 500, 460 0 L 510 0 C 470 500, 520 800, 490 1000 Z" fill="url(#trunk1)" opacity="0.7"/>
+
+            <!-- Branches -->
+            <path d="M 180 400 C 250 380, 320 320, 350 250" stroke="url(#trunk1)" stroke-width="25" fill="none" stroke-linecap="round"/>
+            <path d="M 200 700 C 300 650, 400 680, 450 600" stroke="url(#trunk1)" stroke-width="20" fill="none" stroke-linecap="round"/>
+            <path d="M 810 300 C 700 320, 600 250, 550 200" stroke="url(#trunk1)" stroke-width="28" fill="none" stroke-linecap="round"/>
+            <path d="M 830 650 C 750 620, 650 650, 600 600" stroke="url(#trunk1)" stroke-width="18" fill="none" stroke-linecap="round"/>
+
+            <!-- Canopy Leaves -->
+            <circle cx="180" cy="100" r="250" fill="url(#leafGrad)" />
+            <circle cx="820" cy="50" r="300" fill="url(#leafGrad)" />
+            <circle cx="480" cy="-50" r="220" fill="url(#leafGrad)" />
+            <circle cx="350" cy="300" r="180" fill="url(#leafGrad)" />
+            <circle cx="650" cy="350" r="200" fill="url(#leafGrad)" />
+            
+            <!-- Floating Magic Particles -->
+            <circle cx="200" cy="500" r="4" fill="#FDE047" filter="url(#glow)"/>
+            <circle cx="700" cy="800" r="5" fill="#FDE047" filter="url(#glow)"/>
+            <circle cx="500" cy="400" r="3" fill="#FDE047" filter="url(#glow)"/>
+            <circle cx="300" cy="850" r="6" fill="#FDE047" filter="url(#glow)"/>
+            <circle cx="850" cy="450" r="4" fill="#FDE047" filter="url(#glow)"/>
+
+            <!-- Books Growing on Trees -->
+            <g transform="translate(250, 310) rotate(-20)">
+                <rect x="0" y="0" width="40" height="55" rx="4" fill="#F472B6" />
+                <rect x="32" y="3" width="6" height="49" fill="#FFF" />
+                <line x1="8" y1="15" x2="25" y2="15" stroke="#BE185D" stroke-width="3" stroke-linecap="round"/>
+                <line x1="8" y1="25" x2="20" y2="25" stroke="#BE185D" stroke-width="3" stroke-linecap="round"/>
+            </g>
+            <g transform="translate(680, 230) rotate(15)">
+                <rect x="0" y="0" width="45" height="60" rx="4" fill="#60A5FA" />
+                <rect x="0" y="3" width="6" height="54" fill="#FFF" />
+                <line x1="15" y1="20" x2="35" y2="20" stroke="#1E3A8A" stroke-width="3" stroke-linecap="round"/>
+                <line x1="15" y1="30" x2="25" y2="30" stroke="#1E3A8A" stroke-width="3" stroke-linecap="round"/>
+            </g>
+            <g transform="translate(420, 560) rotate(-10)">
+                <rect x="0" y="0" width="35" height="50" rx="3" fill="#FBBF24" />
+                <rect x="28" y="2" width="5" height="46" fill="#FFF" />
+                <line x1="6" y1="12" x2="22" y2="12" stroke="#B45309" stroke-width="2" stroke-linecap="round"/>
+                <line x1="6" y1="20" x2="16" y2="20" stroke="#B45309" stroke-width="2" stroke-linecap="round"/>
+            </g>
+            <g transform="translate(320, 620) rotate(25)">
+                <rect x="0" y="0" width="30" height="45" rx="3" fill="#34D399" />
+                <rect x="0" y="2" width="5" height="41" fill="#FFF" />
+                <line x1="10" y1="15" x2="22" y2="15" stroke="#065F46" stroke-width="2" stroke-linecap="round"/>
+            </g>
+            <g transform="translate(720, 580) rotate(-30)">
+                <rect x="0" y="0" width="38" height="52" rx="4" fill="#A78BFA" />
+                <rect x="30" y="2" width="6" height="48" fill="#FFF" />
+                <line x1="8" y1="18" x2="24" y2="18" stroke="#5B21B6" stroke-width="2" stroke-linecap="round"/>
+            </g>
+        </svg>
+
+        <!-- ================= HOME SCREEN ================= -->
+        <div id="home-screen" class="absolute inset-0 flex flex-col items-center justify-center p-6 z-20 transition-opacity duration-500" style="display: flex;">
+            
+            <!-- Settings Button -->
+            <button id="settings-btn" class="absolute top-6 right-6 p-3 bg-white/70 backdrop-blur-md rounded-full shadow-lg hover:bg-white hover:scale-105 active:scale-95 transition-all text-pink-500 border-2 border-pink-200 z-30">
+                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+            </button>
+
+            <!-- Wise Pink Owl SVG -->
+            <div class="mb-4">
+                <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" class="w-56 h-56 mx-auto drop-shadow-2xl">
+                    <g id="wise-pink-owl">
+                        <!-- Ear Tufts -->
+                        <path d="M 50 60 C 30 30, 40 20, 60 40 Z" fill="#DB2777" />
+                        <path d="M 150 60 C 170 30, 160 20, 140 40 Z" fill="#DB2777" />
+                        
+                        <!-- Body -->
+                        <path d="M 40 90 C 40 40, 160 40, 160 90 C 160 150, 140 180, 100 180 C 60 180, 40 150, 40 90 Z" fill="#F9A8D4" />
+                        
+                        <!-- Belly -->
+                        <path d="M 60 100 C 60 70, 140 70, 140 100 C 140 160, 120 170, 100 170 C 80 170, 60 160, 60 100 Z" fill="#FCE7F3" />
+                        
+                        <!-- Wings -->
+                        <path d="M 40 90 C 20 110, 25 150, 50 160 C 40 140, 45 110, 40 90 Z" fill="#F472B6" />
+                        <path d="M 160 90 C 180 110, 175 150, 150 160 C 160 140, 155 110, 160 90 Z" fill="#F472B6" />
+
+                        <!-- Glasses -->
+                        <circle cx="75" cy="85" r="22" fill="none" stroke="#FBBF24" stroke-width="4" />
+                        <circle cx="125" cy="85" r="22" fill="none" stroke="#FBBF24" stroke-width="4" />
+                        <path d="M 97 85 L 103 85" stroke="#FBBF24" stroke-width="4" />
+
+                        <!-- Eyes -->
+                        <g class="wise-eye" style="transform-origin: 75px 85px;">
+                            <circle cx="75" cy="85" r="18" fill="white" />
+                            <path d="M 53 85 C 65 70, 85 70, 97 85 Z" fill="#F472B6" />
+                            <circle cx="75" cy="90" r="6" fill="#1F2937" />
+                            <circle cx="73" cy="88" r="2" fill="white" />
+                        </g>
+                        <g class="wise-eye" style="transform-origin: 125px 85px;">
+                            <circle cx="125" cy="85" r="18" fill="white" />
+                            <path d="M 103 85 C 115 70, 135 70, 147 85 Z" fill="#F472B6" />
+                            <circle cx="125" cy="90" r="6" fill="#1F2937" />
+                            <circle cx="123" cy="88" r="2" fill="white" />
+                        </g>
+
+                        <!-- Beak -->
+                        <path d="M 92 95 L 108 95 L 100 115 Z" fill="#F59E0B" />
+
+                        <!-- Feet -->
+                        <path d="M 70 175 C 75 185, 85 185, 90 175 Z" fill="#F59E0B" />
+                        <path d="M 110 175 C 115 185, 125 185, 130 175 Z" fill="#F59E0B" />
+                        
+                        <!-- Feathers detail -->
+                        <path d="M 60 140 C 65 145, 75 145, 80 140 Z" fill="none" stroke="#F9A8D4" stroke-width="3" stroke-linecap="round" />
+                        <path d="M 120 140 C 125 145, 135 145, 140 140 Z" fill="none" stroke="#F9A8D4" stroke-width="3" stroke-linecap="round" />
+                    </g>
+                </svg>
+            </div>
+            
+            <!-- Welcome Message Card -->
+            <div class="bg-white/90 backdrop-blur-md rounded-[2rem] p-6 shadow-2xl max-w-sm w-full text-center border-4 border-pink-300 relative">
+                <!-- Speech Bubble Triangle -->
+                <div class="absolute -top-4 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-[15px] border-r-[15px] border-b-[20px] border-l-transparent border-r-transparent border-b-pink-300"></div>
+                <div class="absolute -top-3 left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-[15px] border-r-[15px] border-b-[20px] border-l-transparent border-r-transparent border-b-white/90"></div>
+                
+                <h1 class="text-3xl font-black text-pink-500 mb-3 tracking-tight">Языковые Пузыри</h1>
+                <p class="text-lg text-gray-700 font-semibold mb-8 leading-snug">
+                    Привет! Давай поиграем! <br>Соедини английские слова с их переводом.
+                </p>
+                
+                <button id="start-btn" class="w-full bg-gradient-to-r from-pink-400 to-purple-400 hover:from-pink-500 hover:to-purple-500 active:scale-95 text-white font-black py-4 px-8 rounded-full shadow-[0_8px_20px_rgba(244,114,182,0.5)] transform transition-all text-xl animate-pulse">
+                    Играть!
+                </button>
+            </div>
+        </div>
+
+        <!-- ================= GAME SCREEN ================= -->
+        <div id="game-screen" class="absolute inset-0 flex flex-col pointer-events-none transition-opacity duration-500 z-10" style="opacity: 0; display: none;">
+            
+            <!-- Top Half: English Zone -->
+            <div id="eng-zone" class="flex-1 w-full flex flex-wrap justify-center items-center content-center p-3 gap-2 pb-6 relative z-10">
+                <!-- English Bubbles dynamically inserted here -->
+            </div>
+            
+            <!-- Middle Divider -->
+            <div class="w-full h-[3px] bg-gradient-to-r from-transparent via-white/80 to-transparent z-20 shadow-[0_0_10px_rgba(255,255,255,0.5)]"></div>
+            
+            <!-- Bottom Half: Russian Zone -->
+            <div id="ru-zone" class="flex-1 w-full flex flex-wrap justify-center items-center content-center p-3 gap-2 bg-white/20 backdrop-blur-md rounded-t-[3rem] shadow-[0_-15px_30px_rgba(0,0,0,0.05)] border-t-2 border-white/60 pt-6 relative z-10">
+                <!-- Russian Bubbles dynamically inserted here -->
+            </div>
+        </div>
+
+        <!-- ================= RESULT SCREEN ================= -->
+        <div id="result-screen" class="absolute inset-0 flex flex-col items-center justify-center p-6 z-30 transition-opacity duration-500 bg-white/40 backdrop-blur-lg" style="opacity: 0; display: none; pointer-events: none;">
+             
+             <!-- Happy Wise Pink Owl -->
+             <div class="mb-4">
+                <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" class="w-48 h-48 mx-auto drop-shadow-2xl">
+                    <g id="wise-pink-owl-happy">
+                        <!-- Ear Tufts -->
+                        <path d="M 50 60 C 30 30, 40 20, 60 40 Z" fill="#DB2777" />
+                        <path d="M 150 60 C 170 30, 160 20, 140 40 Z" fill="#DB2777" />
+                        
+                        <!-- Body -->
+                        <path d="M 40 90 C 40 40, 160 40, 160 90 C 160 150, 140 180, 100 180 C 60 180, 40 150, 40 90 Z" fill="#F9A8D4" />
+                        
+                        <!-- Belly -->
+                        <path d="M 60 100 C 60 70, 140 70, 140 100 C 140 160, 120 170, 100 170 C 80 170, 60 160, 60 100 Z" fill="#FCE7F3" />
+                        
+                        <!-- Wings -->
+                        <path d="M 40 90 C 20 110, 25 150, 50 160 C 40 140, 45 110, 40 90 Z" fill="#F472B6" />
+                        <path d="M 160 90 C 180 110, 175 150, 150 160 C 160 140, 155 110, 160 90 Z" fill="#F472B6" />
+
+                        <!-- Glasses -->
+                        <circle cx="75" cy="85" r="22" fill="none" stroke="#FBBF24" stroke-width="4" />
+                        <circle cx="125" cy="85" r="22" fill="none" stroke="#FBBF24" stroke-width="4" />
+                        <path d="M 97 85 L 103 85" stroke="#FBBF24" stroke-width="4" />
+
+                        <!-- Happy Eyes -->
+                        <path d="M 60 85 C 70 75, 80 75, 90 85" fill="none" stroke="#1F2937" stroke-width="5" stroke-linecap="round" />
+                        <path d="M 110 85 C 120 75, 130 75, 140 85" fill="none" stroke="#1F2937" stroke-width="5" stroke-linecap="round" />
+
+                        <!-- Beak -->
+                        <path d="M 92 95 L 108 95 L 100 115 Z" fill="#F59E0B" />
+
+                        <!-- Feet -->
+                        <path d="M 70 175 C 75 185, 85 185, 90 175 Z" fill="#F59E0B" />
+                        <path d="M 110 175 C 115 185, 125 185, 130 175 Z" fill="#F59E0B" />
+                    </g>
+                </svg>
+            </div>
+            
+            <div class="bg-white rounded-[2rem] p-8 shadow-2xl max-w-sm w-full text-center border-4 border-green-300">
+                <h1 class="text-3xl font-black text-green-500 mb-2">Молодец!</h1>
+                <p id="motivational-text" class="text-lg text-gray-700 font-bold mb-6">
+                    Ты отлично справился!
+                </p>
+                
+                <div class="bg-green-50 rounded-2xl p-5 mb-8 border border-green-100 shadow-inner">
+                    <p class="text-xs sm:text-sm text-green-800 font-bold uppercase tracking-widest mb-2 opacity-80">Угадано с первого раза</p>
+                    <div class="flex items-center justify-center gap-2">
+                        <span id="score-text" class="text-5xl font-black text-green-600">8</span>
+                        <span id="total-score" class="text-3xl font-bold text-green-400">/ 8</span>
+                    </div>
+                </div>
+                
+                <button id="home-btn" class="w-full bg-gradient-to-r from-blue-400 to-indigo-400 hover:from-blue-500 hover:to-indigo-500 active:scale-95 text-white font-black py-4 px-8 rounded-full shadow-[0_8px_20px_rgba(96,165,250,0.5)] transform transition-all text-xl">
+                    На главную
+                </button>
+            </div>
+        </div>
+
+        <!-- ================= SETTINGS SCREEN ================= -->
+        <div id="settings-screen" class="absolute inset-0 flex flex-col items-center justify-center p-6 z-40 transition-opacity duration-300 bg-white/40 backdrop-blur-lg" style="opacity: 0; display: none; pointer-events: none;">
+            <div class="bg-white/95 rounded-[2rem] p-8 w-full max-w-sm shadow-2xl relative border-4 border-pink-300">
+                <h2 class="text-3xl font-black text-pink-500 mb-8 text-center tracking-tight">Настройки</h2>
+                
+                <!-- Font Size Setting -->
+                <div class="mb-8">
+                    <label class="block text-gray-700 font-bold mb-3 flex justify-between items-end">
+                        Размер шрифта <span id="font-size-val" class="text-pink-500 text-sm bg-pink-100 px-2 py-1 rounded-lg">Средний</span>
+                    </label>
+                    <input type="range" id="font-size-slider" min="1" max="5" value="3" class="w-full h-3 bg-pink-100 rounded-lg appearance-none cursor-pointer accent-pink-500">
+                    <div class="flex justify-between text-xs text-gray-400 mt-2 px-1 font-bold">
+                        <span>A</span>
+                        <span class="text-lg leading-none">A</span>
+                    </div>
+                </div>
+
+                <!-- Number of Pairs Setting -->
+                <div class="mb-10">
+                    <label class="block text-gray-700 font-bold mb-3 flex justify-between items-end">
+                        Количество пар <span id="pair-count-val" class="text-pink-500 text-sm bg-pink-100 px-2 py-1 rounded-lg">10</span>
+                    </label>
+                    <input type="range" id="pair-count-slider" min="4" max="25" value="10" class="w-full h-3 bg-pink-100 rounded-lg appearance-none cursor-pointer accent-pink-500">
+                    <div class="flex justify-between text-xs text-gray-400 mt-2 px-1 font-bold">
+                        <span>4</span>
+                        <span>25</span>
+                    </div>
+                </div>
+
+                <button id="close-settings-btn" class="w-full bg-gradient-to-r from-pink-400 to-purple-400 hover:from-pink-500 hover:to-purple-500 active:scale-95 text-white font-black py-4 px-8 rounded-full shadow-[0_8px_20px_rgba(244,114,182,0.5)] transform transition-all text-xl">
+                    Готово
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, initializeFirestore, persistentLocalCache, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- STORAGE SETUP ---
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'language-bubbles-app';
+        let app, db, auth, userId;
+        
+        try {
+            if (typeof __firebase_config !== 'undefined') {
+                const firebaseConfig = JSON.parse(__firebase_config);
+                app = initializeApp(firebaseConfig);
+                // Enable offline persistence caching for seamless PWA usage
+                db = initializeFirestore(app, {
+                    localCache: persistentLocalCache()
+                });
+                auth = getAuth(app);
+                initStorage();
+            }
+        } catch (error) {
+            console.warn("Storage initialization skipped:", error);
+        }
+
+        async function initStorage() {
+            if (!auth) return;
+            try {
+                if (typeof __initial_auth_token !== 'undefined') {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                userId = auth.currentUser?.uid;
+                if (userId) {
+                    await loadSettings();
+                }
+            } catch (error) {
+                console.error("Auth failed:", error);
+            }
+        }
+
+        async function loadSettings() {
+            if (!userId || !db) return;
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'users', userId);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    if (data.fontSizeLevel) {
+                        currentFontSizeLevel = data.fontSizeLevel;
+                        fontSizeSlider.value = currentFontSizeLevel;
+                        const labels = {1: 'Очень мелкий', 2: 'Мелкий', 3: 'Средний', 4: 'Крупный', 5: 'Огромный'};
+                        fontSizeVal.textContent = labels[currentFontSizeLevel];
+                    }
+                    if (data.targetRoundSize) {
+                        TARGET_ROUND_SIZE = data.targetRoundSize;
+                        pairCountSlider.value = TARGET_ROUND_SIZE;
+                        pairCountVal.textContent = TARGET_ROUND_SIZE;
+                    }
+                }
+            } catch (error) {
+                console.error("Failed to load settings:", error);
+            }
+        }
+
+        async function saveSettings() {
+            if (!userId || !db) return;
+            try {
+                const docRef = doc(db, 'artifacts', appId, 'users', userId);
+                await setDoc(docRef, {
+                    fontSizeLevel: currentFontSizeLevel,
+                    targetRoundSize: TARGET_ROUND_SIZE
+                });
+            } catch (error) {
+                console.error("Failed to save settings:", error);
+            }
+        }
+
+        // --- GAME DATA ---
+        // All words from the provided list
+        const allWordPairs = [
+            { id: 1, en: "yesterday", ru: "вчера" },
+            { id: 2, en: "all", ru: "все" },
+            { id: 3, en: "my", ru: "мои" },
+            { id: 4, en: "troubles", ru: "неприятности" },
+            { id: 5, en: "seemed", ru: "казались" },
+            { id: 6, en: "so", ru: "так" },
+            { id: 7, en: "far", ru: "далеко" },
+            { id: 8, en: "away", ru: "прочь" },
+            { id: 9, en: "now", ru: "сейчас" },
+            { id: 10, en: "it", ru: "это" },
+            { id: 11, en: "looks", ru: "выглядит" },
+            { id: 12, en: "as", ru: "как" },
+            { id: 13, en: "though", ru: "будто" },
+            { id: 14, en: "they're", ru: "они" },
+            { id: 15, en: "here", ru: "здесь" },
+            { id: 16, en: "to", ru: "чтобы" },
+            { id: 17, en: "stay", ru: "остаться" },
+            { id: 18, en: "i", ru: "я" },
+            { id: 19, en: "believe", ru: "верю" },
+            { id: 20, en: "in", ru: "в" },
+            { id: 21, en: "suddenly", ru: "внезапно" },
+            { id: 22, en: "i'm", ru: "я" },
+            { id: 23, en: "not", ru: "не" },
+            { id: 24, en: "half", ru: "половина" },
+            { id: 25, en: "the", ru: "этот" },
+            { id: 26, en: "man", ru: "мужчина" },
+            { id: 27, en: "used", ru: "привык" },
+            { id: 28, en: "be", ru: "быть" },
+            { id: 29, en: "there's", ru: "там есть" },
+            { id: 30, en: "a", ru: "какой-то" },
+            { id: 31, en: "shadow", ru: "тень" },
+            { id: 32, en: "hangin'", ru: "висящий (разг.)" },
+            { id: 33, en: "over", ru: "над" },
+            { id: 34, en: "me", ru: "мной" },
+            { id: 35, en: "came", ru: "пришла" },
+            { id: 36, en: "why", ru: "почему" },
+            { id: 37, en: "she", ru: "она" },
+            { id: 38, en: "had", ru: "должна была" },
+            { id: 39, en: "go", ru: "идти" },
+            { id: 40, en: "don't", ru: "не" },
+            { id: 41, en: "know", ru: "знаю" },
+            { id: 42, en: "wouldn't", ru: "не стала бы" },
+            { id: 43, en: "say", ru: "сказать" },
+            { id: 44, en: "said", ru: "сказал" },
+            { id: 45, en: "something", ru: "что-то" },
+            { id: 46, en: "wrong", ru: "неправильное" },
+            { id: 47, en: "long", ru: "тоскую" },
+            { id: 48, en: "for", ru: "по" },
+            { id: 49, en: "love", ru: "любовь" },
+            { id: 50, en: "was", ru: "была" },
+            { id: 51, en: "such", ru: "такой" },
+            { id: 52, en: "an", ru: "какой-то" },
+            { id: 53, en: "easy", ru: "легкая" },
+            { id: 54, en: "game", ru: "игра" },
+            { id: 55, en: "play", ru: "играть" },
+            { id: 56, en: "need", ru: "нуждаюсь" },
+            { id: 57, en: "place", ru: "место" },
+            { id: 58, en: "hide", ru: "спрятаться" }
+        ];
+
+        // --- GAME STATE ---
+        let TARGET_ROUND_SIZE = 10; // Target number of pairs to show per round
+        let currentFontSizeLevel = 3; // Bubble font size (1 to 5)
+        let currentRoundPairs = [];
+        let selectedBubble = null;
+        let matchedCount = 0;
+        let firstTryMatches = 0;
+        let mistakes = new Set(); // Stores pair IDs that were guessed incorrectly
+
+        // DOM Elements
+        const screens = {
+            home: document.getElementById('home-screen'),
+            game: document.getElementById('game-screen'),
+            result: document.getElementById('result-screen'),
+            settings: document.getElementById('settings-screen')
+        };
+        const engZone = document.getElementById('eng-zone');
+        const ruZone = document.getElementById('ru-zone');
+        const scoreText = document.getElementById('score-text');
+        const totalScoreElement = document.getElementById('total-score');
+        const motivationalText = document.getElementById('motivational-text');
+        
+        // Settings Elements
+        const settingsBtn = document.getElementById('settings-btn');
+        const closeSettingsBtn = document.getElementById('close-settings-btn');
+        const fontSizeSlider = document.getElementById('font-size-slider');
+        const pairCountSlider = document.getElementById('pair-count-slider');
+        const fontSizeVal = document.getElementById('font-size-val');
+        const pairCountVal = document.getElementById('pair-count-val');
+
+        // Utility to smoothly crossfade between screens
+        function showScreen(screenName) {
+            Object.keys(screens).forEach(key => {
+                const el = screens[key];
+                if (key === screenName) {
+                    el.style.display = 'flex';
+                    // Small delay to allow display:flex to apply before changing opacity for transition
+                    setTimeout(() => {
+                        el.style.opacity = '1';
+                        el.style.pointerEvents = 'auto';
+                    }, 30);
+                } else {
+                    el.style.opacity = '0';
+                    el.style.pointerEvents = 'none';
+                    // Wait for fade out animation to complete before hiding
+                    setTimeout(() => {
+                        if (el.style.opacity === '0') {
+                            el.style.display = 'none';
+                        }
+                    }, 500);
+                }
+            });
+        }
+
+        function startGame() {
+            // Reset state
+            selectedBubble = null;
+            matchedCount = 0;
+            firstTryMatches = 0;
+            mistakes.clear();
+            engZone.innerHTML = '';
+            ruZone.innerHTML = '';
+
+            // Pick a random subset of words for this round based on settings
+            currentRoundPairs = shuffleArray([...allWordPairs]).slice(0, TARGET_ROUND_SIZE);
+
+            // Show screen first to allow DOM measuring
+            showScreen('game');
+
+            // Recursive function to fit bubbles perfectly on any screen size
+            function renderAndFit() {
+                engZone.innerHTML = '';
+                ruZone.innerHTML = '';
+
+                // Generate, shuffle, and append bubbles
+                const engBubbles = currentRoundPairs.map(p => createBubble(p.en, p.id, 'en'));
+                const ruBubbles = currentRoundPairs.map(p => createBubble(p.ru, p.id, 'ru'));
+
+                shuffleArray(engBubbles).forEach(b => engZone.appendChild(b));
+                shuffleArray(ruBubbles).forEach(b => ruZone.appendChild(b));
+                
+                // Allow browser to calculate layout before checking dimensions
+                requestAnimationFrame(() => {
+                    // Check if content overflows its container
+                    // Added a small buffer (5px) to prevent borderline tight fits
+                    const engOverflow = engZone.scrollHeight > engZone.clientHeight + 5;
+                    const ruOverflow = ruZone.scrollHeight > ruZone.clientHeight + 5;
+
+                    // If it overflows and we still have more than 4 pairs, reduce and try again
+                    if ((engOverflow || ruOverflow) && currentRoundPairs.length > 4) {
+                        currentRoundPairs.pop(); // Remove one pair
+                        renderAndFit(); // Try fitting again
+                    } else {
+                        // Fit successful! Update the total score display
+                        if (totalScoreElement) {
+                            totalScoreElement.textContent = `/ ${currentRoundPairs.length}`;
+                        }
+                    }
+                });
+            }
+
+            renderAndFit();
+        }
+
+        function shuffleArray(array) {
+            return array.sort(() => Math.random() - 0.5);
+        }
+
+        function createBubble(text, pairId, lang) {
+            const bubble = document.createElement('div');
+            
+            // Map font size slider (1-5) to tailwind sizing classes
+            const fontClasses = {
+                1: 'text-xs md:text-sm',
+                2: 'text-sm md:text-base',
+                3: 'text-base md:text-lg',
+                4: 'text-lg md:text-xl',
+                5: 'text-xl md:text-2xl'
+            };
+            const activeFontClass = fontClasses[currentFontSizeLevel] || fontClasses[3];
+            
+            // Responsive oval sizing: width fits content based on word length
+            bubble.className = `bubble rounded-full px-5 py-2 md:px-6 md:py-3
+                                flex items-center justify-center text-center cursor-pointer 
+                                font-bold text-gray-800 leading-tight ${activeFontClass}
+                                whitespace-nowrap overflow-hidden relative shadow-sm`;
+            
+            // Reduced random offset so ovals pack better without overlapping too much
+            const offsetX = Math.random() * 8 - 4;
+            const offsetY = Math.random() * 8 - 4;
+            bubble.style.margin = `${offsetY}px ${offsetX}px`;
+            
+            bubble.textContent = text;
+            bubble.dataset.pairId = pairId;
+            bubble.dataset.lang = lang;
+            
+            // Use pointerdown for zero-latency touch response
+            bubble.addEventListener('pointerdown', handleBubbleClick);
+            
+            return bubble;
+        }
+
+        function handleBubbleClick(e) {
+            e.preventDefault(); // Prevent standard click/zoom actions
+            const bubble = e.currentTarget;
+
+            // Ignore taps on already matched or currently selected bubbles
+            if (bubble.classList.contains('matched') || bubble === selectedBubble) {
+                return;
+            }
+
+            if (!selectedBubble) {
+                // Scenario 1: First bubble tapped
+                selectedBubble = bubble;
+                bubble.classList.add('selected');
+                return;
+            }
+
+            // Scenario 2: Second bubble tapped - Evaluate match
+            const pairId1 = parseInt(selectedBubble.dataset.pairId);
+            const pairId2 = parseInt(bubble.dataset.pairId);
+            const lang1 = selectedBubble.dataset.lang;
+            const lang2 = bubble.dataset.lang;
+
+            let isMatch = false;
+
+            if (lang1 !== lang2) {
+                if (pairId1 === pairId2) {
+                    isMatch = true;
+                } else {
+                    const pair1 = currentRoundPairs.find(p => p.id === pairId1);
+                    const pair2 = currentRoundPairs.find(p => p.id === pairId2);
+                    
+                    // Allow interchangeable matching for identical words in either language
+                    if (pair1 && pair2 && (pair1.en === pair2.en || pair1.ru === pair2.ru)) {
+                        isMatch = true;
+                    }
+                }
+            }
+
+            if (isMatch) {
+                // --- CORRECT MATCH ---
+                
+                // If this pair hasn't been failed before, it's a first-try success!
+                if (!mistakes.has(pairId1)) {
+                    firstTryMatches++;
+                }
+
+                // Apply success visuals to both
+                selectedBubble.classList.remove('selected');
+                selectedBubble.classList.add('matched');
+                bubble.classList.add('matched');
+
+                // Trigger particle splash
+                createSplash(selectedBubble);
+                createSplash(bubble);
+
+                selectedBubble = null;
+                matchedCount++;
+
+                // Check win condition
+                if (matchedCount === currentRoundPairs.length) {
+                    setTimeout(endGame, 1000); // Wait for final pop animations
+                }
+
+            } else {
+                // --- INCORRECT MATCH ---
+                
+                // Record mistake for the first selected item, so it loses its "first try" point.
+                // We do not penalize the second item so that one mistake equals exactly one lost point.
+                mistakes.add(pairId1);
+
+                // Flash the wrongly tapped bubble red
+                bubble.classList.add('wrong');
+                
+                // Per instructions: "first tapped bubble continues to be highlighted"
+                // So we do NOT clear selectedBubble. User must find the matching translation.
+                
+                // Remove the red flash class after animation completes so it can be tapped again
+                setTimeout(() => {
+                    bubble.classList.remove('wrong');
+                }, 500);
+            }
+        }
+
+        function createSplash(element) {
+            const rect = element.getBoundingClientRect();
+            // Center of the bubble
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            const colors = ['#4ADE80', '#22C55E', '#16A34A', '#86EFAC'];
+            const particleCount = 12 + Math.random() * 5;
+
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'splash-particle shadow-sm';
+                
+                // Random size 6px to 12px
+                const size = 6 + Math.random() * 6; 
+                particle.style.width = `${size}px`;
+                particle.style.height = `${size}px`;
+                particle.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                particle.style.left = `${centerX}px`;
+                particle.style.top = `${centerY}px`;
+                
+                document.body.appendChild(particle);
+                
+                // Physics: random angle and distance
+                const angle = Math.random() * Math.PI * 2;
+                const velocity = 40 + Math.random() * 60; // Spread distance
+                const tx = Math.cos(angle) * velocity;
+                const ty = Math.sin(angle) * velocity;
+                
+                // Animate out and fade
+                const animation = particle.animate([
+                    { transform: 'translate(-50%, -50%) scale(1)', opacity: 1 },
+                    { transform: `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px)) scale(0)`, opacity: 0 }
+                ], {
+                    duration: 500 + Math.random() * 300,
+                    easing: 'cubic-bezier(0, 0.9, 0.57, 1)'
+                });
+                
+                // Cleanup DOM after animation
+                animation.onfinish = () => particle.remove();
+            }
+        }
+
+        function endGame() {
+            // Update Result UI
+            scoreText.textContent = firstTryMatches;
+            
+            if (firstTryMatches === currentRoundPairs.length) {
+                motivationalText.textContent = "Идеально! Ни одной ошибки!"; // Perfect! Not a single mistake!
+                motivationalText.className = "text-lg font-black text-pink-500 mb-6";
+            } else if (firstTryMatches >= currentRoundPairs.length / 2) {
+                motivationalText.textContent = "Отличная работа! Продолжай в том же духе!"; // Great job! Keep it up!
+                motivationalText.className = "text-lg text-gray-700 font-bold mb-6";
+            } else {
+                motivationalText.textContent = "Хорошая попытка! В следующий раз получится лучше!"; // Good try! Better next time!
+                motivationalText.className = "text-lg text-gray-700 font-bold mb-6";
+            }
+
+            showScreen('result');
+        }
+
+        // --- EVENT LISTENERS ---
+        document.getElementById('start-btn').addEventListener('click', startGame);
+        document.getElementById('home-btn').addEventListener('click', () => showScreen('home'));
+
+        // Settings Listeners
+        settingsBtn.addEventListener('click', () => showScreen('settings'));
+        closeSettingsBtn.addEventListener('click', () => {
+            showScreen('home');
+            saveSettings();
+        });
+
+        const sizeLabels = {1: 'Очень мелкий', 2: 'Мелкий', 3: 'Средний', 4: 'Крупный', 5: 'Огромный'};
+        
+        fontSizeSlider.addEventListener('input', (e) => {
+            currentFontSizeLevel = parseInt(e.target.value);
+            fontSizeVal.textContent = sizeLabels[currentFontSizeLevel];
+        });
+
+        pairCountSlider.addEventListener('input', (e) => {
+            TARGET_ROUND_SIZE = parseInt(e.target.value);
+            pairCountVal.textContent = TARGET_ROUND_SIZE;
+        });
+
+    </script>
+</body>
+</html>
