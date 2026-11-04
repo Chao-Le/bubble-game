@@ -1,4 +1,5 @@
-const CACHE_NAME = 'bubble-game-v1';
+const APP_VERSION = 'v1';
+const CACHE_NAME = 'bubble-game-' + APP_VERSION;
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -33,6 +34,12 @@ self.addEventListener('activate', (event) => {
 
 // Serve saved files when offline
 self.addEventListener('fetch', (event) => {
+  // Intercept version requests from the main page
+  if (event.request.url.includes('__version__')) {
+    event.respondWith(new Response(APP_VERSION, { headers: { 'Content-Type': 'text/plain' } }));
+    return;
+  }
+  
   event.respondWith(
     caches.match(event.request).then((response) => {
       return response || fetch(event.request);
