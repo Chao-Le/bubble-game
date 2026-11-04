@@ -1412,12 +1412,24 @@
         } catch(e) {}
 
     </script>
-       <script>
+   <script>
        if ('serviceWorker' in navigator) {
            window.addEventListener('load', () => {
                navigator.serviceWorker.register('./service-worker.js')
                    .then(registration => {
                        console.log('ServiceWorker registered:', registration.scope);
+                       // Request version directly from the service worker
+                       fetch('./__version__')
+                           .then(res => res.text())
+                           .then(version => {
+                               const versionEl = document.getElementById('app-version');
+                               if (versionEl) versionEl.textContent = version;
+                           })
+                           .catch(() => {
+                               // Safe fallback if the service worker isn't fully active yet
+                               const versionEl = document.getElementById('app-version');
+                               if (versionEl) versionEl.textContent = 'v1';
+                           });
                    })
                    .catch(error => {
                        console.log('ServiceWorker registration failed:', error);
@@ -1425,5 +1437,7 @@
            });
        }
    </script>
+   <!-- Version indicator: bottom-right corner, unobtrusive and safe -->
+   <div id="app-version" class="fixed bottom-2 right-2 text-xs text-gray-400 font-mono pointer-events-none select-none z-50 opacity-50"></div>
 </body>
 </html>
