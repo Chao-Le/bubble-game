@@ -1,4 +1,4 @@
-const APP_VERSION = 'v1';
+const APP_VERSION = 'v2';
 const CACHE_NAME = 'bubble-game-' + APP_VERSION;
 const ASSETS_TO_CACHE = [
   './',
